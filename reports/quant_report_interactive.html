@@ -1,0 +1,333 @@
+<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Algo Performance — Aggregate Portfolio (interactive)</title><style>
+:root{
+  --ink:#0f1726; --ink-2:#5b6678; --ink-3:#8a93a3;
+  --line:#e6e9ef; --line-2:#f0f2f6;
+  --bg:#f4f6f9; --surface:#ffffff;
+  --accent:#2563eb; --accent-2:#0d9488;
+  --pos:#0f8a5f; --neg:#c0392b; --warn:#9a5b14;
+  --shadow:0 1px 2px rgba(16,23,38,.06),0 4px 16px rgba(16,23,38,.05);
+  --mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+  font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+.appbar{background:#0f1726;color:#fff;padding:18px 0}
+.appbar .wrap{display:flex;align-items:flex-end;justify-content:space-between;gap:16px}
+.appbar .eyebrow{color:#9fb3d1}
+.appbar h1{color:#fff;margin:4px 0 0;font-size:22px;font-weight:700;letter-spacing:-.01em}
+.wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+.eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;font-weight:600;color:var(--ink-2)}
+.lede{color:var(--ink-2);font-size:13.5px;max-width:70ch;margin:6px 0 0}
+main{padding:26px 0 70px}
+section{margin:0 0 26px}
+h2{font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--ink-2);margin:0 0 12px}
+.toolbar{position:sticky;top:0;z-index:20;background:rgba(244,246,249,.92);
+  backdrop-filter:blur(6px);border-bottom:1px solid var(--line);
+  padding:10px 0;margin-bottom:22px}
+.toolbar .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.search{flex:1 1 220px;min-width:160px;display:flex;align-items:center;gap:8px;
+  background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 11px}
+.search input{border:0;outline:0;width:100%;font-size:13px;background:transparent;color:var(--ink)}
+.search svg{flex:none;color:var(--ink-3)}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;
+  padding:7px 12px;font-size:12.5px;font-weight:600;color:var(--ink-2);cursor:pointer}
+.btn:hover{border-color:var(--ink-3);color:var(--ink)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;
+  padding:14px 16px;box-shadow:var(--shadow)}
+.stat .k{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+.stat .v{font-family:var(--mono);font-size:22px;font-weight:600;margin-top:4px;letter-spacing:-.02em}
+.meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-top:4px}
+.meta .cell{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 13px}
+.meta .k{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+.meta .v{font-family:var(--mono);font-size:14px;font-weight:600;margin-top:2px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;
+  box-shadow:var(--shadow);overflow:hidden}
+.panel-pad{padding:16px 18px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;
+  box-shadow:var(--shadow);margin-bottom:14px;overflow:hidden}
+.card-head{display:flex;align-items:center;gap:12px;padding:14px 18px;cursor:pointer;user-select:none}
+.card-head:hover{background:var(--line-2)}
+.card-head .chev{transition:transform .18s;color:var(--ink-3);flex:none}
+.card.collapsed .chev{transform:rotate(-90deg)}
+.card.collapsed .card-body{display:none}
+.card-head .title{font-size:16px;font-weight:700;letter-spacing:-.01em}
+.card-head .cov{font-size:12px;color:var(--ink-3);margin-left:auto;text-align:right}
+.card-body{border-top:1px solid var(--line)}
+.card-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:0}
+.card-grid > .chart-box{border-right:1px solid var(--line)}
+@media(max-width:760px){.card-grid{grid-template-columns:1fr}
+  .card-grid > .chart-box{border-right:0;border-bottom:1px solid var(--line)}}
+.chart-box{padding:16px 18px}
+.chart-box .lab{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);margin-bottom:8px}
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead th{position:sticky;top:0;background:var(--surface)}
+th,td{text-align:left;padding:9px 14px;border-bottom:1px solid var(--line-2)}
+th{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+tbody tr:nth-child(even){background:#fbfcfe}
+tbody tr:hover{background:#f2f6ff}
+td.metric{font-weight:600;color:var(--ink)}
+td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+th.sortable{cursor:pointer;white-space:nowrap}
+th.sortable:hover{color:var(--ink)}
+th.sortable .arr{opacity:.35;font-size:9px}
+th.sortable.asc .arr,th.sortable.desc .arr{opacity:1}
+.pos{color:var(--pos)} .neg{color:var(--neg)} .muted{color:var(--ink-3)}
+.flag{display:inline-block;font-size:10.5px;font-weight:600;padding:3px 9px;border-radius:999px;
+  background:#fef3e2;color:var(--warn);border:1px solid #f4d9b0}
+.flag.ok{background:#e8f6ee;color:var(--pos);border-color:#cdead9}
+.chart{width:100%;height:auto;display:block}
+.chart .grid{stroke:#eef1f6;stroke-width:1}
+.chart .zero{stroke:#c2c9d6;stroke-width:1;stroke-dasharray:3 3}
+.chart .ytick{fill:var(--ink-3);font-size:10px;font-family:var(--mono);text-anchor:end}
+.chart .xtick{fill:var(--ink-3);font-size:10px;font-family:var(--mono);text-anchor:middle}
+.chart .legend{fill:var(--ink-2);font-size:11px;font-weight:600}
+.chart-empty{color:var(--ink-3);font-size:12px;padding:30px 0;text-align:center}
+.spark{display:inline-block;vertical-align:middle}
+.spark-line{fill:none;stroke:var(--accent);stroke-width:1.4}
+.spark-zero{stroke:#c7ccd6;stroke-width:1;stroke-dasharray:2 2}
+.empty-note{color:var(--ink-3);font-size:13px;padding:16px 0}
+.chart-canvas{width:100%;display:block;cursor:crosshair;touch-action:none}
+.chart-hd{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+.chart-hd .lab{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+.chart-hint{font-size:10.5px;color:var(--ink-3)}
+.ch-tip{position:fixed;z-index:50;pointer-events:none;background:#0f1726;color:#fff;
+  font-size:11.5px;line-height:1.35;padding:6px 9px;border-radius:7px;box-shadow:var(--shadow);
+  display:none;white-space:nowrap;font-family:var(--mono)}
+.ch-tip b{font-family:var(--sans)}
+.daterow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:8px;flex-basis:100%}
+.daterow .lab{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+.daterow input[type=date]{font-family:var(--sans);font-size:13px;color:var(--ink);
+  border:1px solid var(--line);border-radius:8px;padding:6px 9px;background:var(--surface)}
+.daterow .preset{border:1px solid var(--line);background:var(--surface);border-radius:8px;
+  padding:6px 11px;font-size:12px;font-weight:600;color:var(--ink-2);cursor:pointer}
+.daterow .preset:hover{border-color:var(--ink-3);color:var(--ink)}
+.daterow .preset.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+#rangeLabel{font-family:var(--mono);font-size:12px;color:var(--ink-2);margin-left:auto}
+.toTop{position:fixed;right:22px;bottom:22px;width:40px;height:40px;border-radius:50%;
+  border:1px solid var(--line);background:var(--surface);box-shadow:var(--shadow);
+  cursor:pointer;display:none;align-items:center;justify-content:center;color:var(--ink-2);z-index:30}
+.toTop.show{display:flex}
+footer{margin-top:40px;border-top:1px solid var(--line);padding-top:16px;
+  font-size:12px;color:var(--ink-2)}
+footer h3{font-size:11px;text-transform:uppercase;letter-spacing:.08em;margin:0 0 8px;color:var(--ink-3)}
+footer ul{margin:0;padding-left:18px} footer li{margin:3px 0}
+@media print{body{background:#fff}.toolbar,.toTop,.btn,.search{display:none!important}
+  .card{break-inside:avoid;box-shadow:none}.card.collapsed .card-body{display:block!important}
+  .appbar{background:#fff;color:#000;border-bottom:2px solid #000}
+  .appbar h1,.appbar .eyebrow{color:#000}}
+</style></head><body><header class='appbar'><div class='wrap'><div><div class='eyebrow'>Performance Report</div><h1>Algo Performance — Aggregate Portfolio</h1></div></div></header><div class='wrap'><p class='lede'>Per-algo track record: daily return = sum_mtm / sum_allocation (allocation scaled ×100). Use the date range or drag a chart to recompute for any sub-period.</p></div><div class='toolbar'><div class='wrap'><label class='search'><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg><input id='algoSearch' type='search' placeholder='Filter algos by ID...'></label><button class='btn' id='expandAll'>Expand all</button><button class='btn' id='collapseAll'>Collapse all</button><div class='daterow'><span class='lab'>Range</span><input type='date' id='dateFrom'><span class='lab'>to</span><input type='date' id='dateTo'><button class='preset active' data-range='all'>All</button><button class='preset' data-range='1y'>1Y</button><button class='preset' data-range='6m'>6M</button><button class='preset' data-range='3m'>3M</button><button class='preset' data-range='ytd'>YTD</button><button class='preset' id='resetRange'>Reset</button><span id='rangeLabel'></span></div></div></div><main class='wrap'><div class='meta'><div class='cell'><div class='k'>Algos reported</div><div class='v'>2</div></div><div class='cell'><div class='k'>Allocation scale</div><div class='v'>×100</div></div><div class='cell'><div class='k'>Data range</div><div class='v'>12 APR 2024 &ndash; 29 MAY 2026</div></div></div><section><h2>Summary — All algos <span class='muted' style='text-transform:none;font-weight:400'>(click a column to sort)</span></h2><div class='panel'><div class='tbl-wrap'><table><thead><tr><th class='sortable'>Algo <span class='arr'>&#9650;&#9660;</span></th><th class='num sortable'>CAGR <span class='arr'>&#9650;&#9660;</span></th><th class='num sortable'>Sharpe <span class='arr'>&#9650;&#9660;</span></th><th class='num sortable'>Sortino <span class='arr'>&#9650;&#9660;</span></th><th class='num sortable'>Max DD <span class='arr'>&#9650;&#9660;</span></th><th class='num sortable'>Calmar <span class='arr'>&#9650;&#9660;</span></th><th class='num sortable'>Cum. Return <span class='arr'>&#9650;&#9660;</span></th><th class='num sortable'>Days <span class='arr'>&#9650;&#9660;</span></th></tr></thead><tbody><tr data-algo-row='7'><td class='metric' data-v='7'>7</td><td class='num metric-val pos' data-algo='7' data-metric='cagr' data-v='0.3967761289498166'>39.68%</td><td class='num metric-val pos' data-algo='7' data-metric='sharpe' data-v='2.04653211527862'>2.05</td><td class='num metric-val pos' data-algo='7' data-metric='sortino' data-v='3.0074449765256763'>3.01</td><td class='num metric-val neg' data-algo='7' data-metric='maxdd' data-v='-0.050278134418808684'>-5.03%</td><td class='num metric-val pos' data-algo='7' data-metric='calmar' data-v='7.891623934268045'>7.89</td><td class='num metric-val pos' data-algo='7' data-metric='cumret' data-v='0.6099388990740019'>60.99%</td><td class='num' data-algo='7' data-metric='days' data-v='290'>290</td></tr><tr data-algo-row='19'><td class='metric' data-v='19'>19</td><td class='num metric-val pos' data-algo='19' data-metric='cagr' data-v='0.4583568412062131'>45.84%</td><td class='num metric-val pos' data-algo='19' data-metric='sharpe' data-v='1.9794395441360546'>1.98</td><td class='num metric-val pos' data-algo='19' data-metric='sortino' data-v='2.9534513213944353'>2.95</td><td class='num metric-val neg' data-algo='19' data-metric='maxdd' data-v='-0.10787318625000002'>-10.79%</td><td class='num metric-val pos' data-algo='19' data-metric='calmar' data-v='4.249034047663657'>4.25</td><td class='num metric-val pos' data-algo='19' data-metric='cumret' data-v='0.26726322249999995'>26.73%</td><td class='num' data-algo='19' data-metric='days' data-v='110'>110</td></tr></tbody></table></div></div></section><section><h2>Per-algo detail</h2><div class='card' data-algo-row='7'><div class='card-head'><svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="6 9 12 15 18 9"/></svg><span class='title'>Algo 7</span><span class='flag algoflag algoflag' data-algo='7'>breaks: 3 seg</span><span class='cov' data-algo='7'>290d &middot; 12 APR 2024 &ndash; 29 MAY 2026</span></div><div class='card-body'><div class='card-grid'><div class='chart-box'><div class='chart-hd'><span class='lab'>Cumulative return (%)</span><span class='chart-hint'>drag to zoom &middot; double-click to reset</span></div><canvas class='chart-canvas' data-algo='7' data-chart='equity' data-h='240'></canvas><div class='chart-hd' style='margin-top:12px'><span class='lab'>Rolling Sharpe (63d window)</span><span class='chart-hint'>line begins after first window fills</span></div><canvas class='chart-canvas' data-algo='7' data-chart='rolling' data-h='150'></canvas></div><div class='tbl-wrap'><table><thead><tr><th>Metric</th><th class='num'>Portfolio</th></tr></thead><tbody><tr><td class='metric'>CAGR</td><td class='num metric-val pos' data-algo='7' data-metric='cagr' data-v='0.3967761289498166'>39.68%</td></tr><tr><td class='metric'>Cumulative Return</td><td class='num metric-val pos' data-algo='7' data-metric='cumret' data-v='0.6099388990740019'>60.99%</td></tr><tr><td class='metric'>Sharpe</td><td class='num metric-val pos' data-algo='7' data-metric='sharpe' data-v='2.04653211527862'>2.05</td></tr><tr><td class='metric'>Sortino</td><td class='num metric-val pos' data-algo='7' data-metric='sortino' data-v='3.0074449765256763'>3.01</td></tr><tr><td class='metric'>Calmar</td><td class='num metric-val pos' data-algo='7' data-metric='calmar' data-v='7.891623934268045'>7.89</td></tr><tr><td class='metric'>Annual Volatility</td><td class='num metric-val ' data-algo='7' data-metric='vol' data-v='0.19387730394633879'>19.39%</td></tr><tr><td class='metric'>Max Drawdown</td><td class='num metric-val neg' data-algo='7' data-metric='maxdd' data-v='-0.050278134418808684'>-5.03%</td></tr><tr><td class='metric'>Avg Drawdown Days</td><td class='num metric-val ' data-algo='7' data-metric='avgddays' data-v='5.0'>5.0</td></tr><tr><td class='metric'>Max Consecutive Wins</td><td class='num metric-val ' data-algo='7' data-metric='maxwins' data-v='6'>6</td></tr><tr><td class='metric'>Max Consecutive Losses</td><td class='num metric-val ' data-algo='7' data-metric='maxlosses' data-v='7'>7</td></tr><tr><td class='metric'>Kelly Criterion</td><td class='num metric-val ' data-algo='7' data-metric='kelly' data-v='0.18371355237128373'>18.37%</td></tr><tr><td class='metric'>Rolling Sharpe (last)</td><td class='num metric-val ' data-algo='7' data-metric='rolllast' data-v='2.3765696329191743'>2.38</td></tr></tbody></table></div></div></div></div><div class='card' data-algo-row='19'><div class='card-head'><svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="6 9 12 15 18 9"/></svg><span class='title'>Algo 19</span><span class='flag algoflag algoflag' data-algo='19'>breaks: 2 seg</span><span class='cov' data-algo='19'>110d &middot; 03 DEC 2025 &ndash; 29 MAY 2026</span></div><div class='card-body'><div class='card-grid'><div class='chart-box'><div class='chart-hd'><span class='lab'>Cumulative return (%)</span><span class='chart-hint'>drag to zoom &middot; double-click to reset</span></div><canvas class='chart-canvas' data-algo='19' data-chart='equity' data-h='240'></canvas><div class='chart-hd' style='margin-top:12px'><span class='lab'>Rolling Sharpe (63d window)</span><span class='chart-hint'>line begins after first window fills</span></div><canvas class='chart-canvas' data-algo='19' data-chart='rolling' data-h='150'></canvas></div><div class='tbl-wrap'><table><thead><tr><th>Metric</th><th class='num'>Portfolio</th></tr></thead><tbody><tr><td class='metric'>CAGR</td><td class='num metric-val pos' data-algo='19' data-metric='cagr' data-v='0.4583568412062131'>45.84%</td></tr><tr><td class='metric'>Cumulative Return</td><td class='num metric-val pos' data-algo='19' data-metric='cumret' data-v='0.26726322249999995'>26.73%</td></tr><tr><td class='metric'>Sharpe</td><td class='num metric-val pos' data-algo='19' data-metric='sharpe' data-v='1.9794395441360546'>1.98</td></tr><tr><td class='metric'>Sortino</td><td class='num metric-val pos' data-algo='19' data-metric='sortino' data-v='2.9534513213944353'>2.95</td></tr><tr><td class='metric'>Calmar</td><td class='num metric-val pos' data-algo='19' data-metric='calmar' data-v='4.249034047663657'>4.25</td></tr><tr><td class='metric'>Annual Volatility</td><td class='num metric-val ' data-algo='19' data-metric='vol' data-v='0.2315588988630958'>23.16%</td></tr><tr><td class='metric'>Max Drawdown</td><td class='num metric-val neg' data-algo='19' data-metric='maxdd' data-v='-0.10787318625000002'>-10.79%</td></tr><tr><td class='metric'>Avg Drawdown Days</td><td class='num metric-val ' data-algo='19' data-metric='avgddays' data-v='10.714285714285714'>10.7</td></tr><tr><td class='metric'>Max Consecutive Wins</td><td class='num metric-val ' data-algo='19' data-metric='maxwins' data-v='10'>10</td></tr><tr><td class='metric'>Max Consecutive Losses</td><td class='num metric-val ' data-algo='19' data-metric='maxlosses' data-v='5'>5</td></tr><tr><td class='metric'>Kelly Criterion</td><td class='num metric-val ' data-algo='19' data-metric='kelly' data-v='0.205905263451101'>20.59%</td></tr><tr><td class='metric'>Rolling Sharpe (last)</td><td class='num metric-val ' data-algo='19' data-metric='rolllast' data-v='1.5631383001015782'>1.56</td></tr></tbody></table></div></div></div></div></section></main><div class='wrap'><footer><h3>Formulas &amp; methodology</h3><ul><li><b>Daily return (r<sub>t</sub>)</b> = sum_mtm<sub>t</sub> / sum_allocation<sub>t</sub> &nbsp;|&nbsp; sum_allocation = &Sigma;(raw_allocation &times; 100) across all users of that algo on date t. Returns are expressed as fractions; multiplied by 100 for display as %.</li><li><b>Cumulative Return</b> = &Sigma; r<sub>t</sub> &nbsp;&nbsp;(simple additive sum, not compounded). The equity curve is the running cumulative sum of daily returns.</li><li><b>CAGR</b> = mean(r<sub>t</sub>) &times; N &nbsp;|&nbsp; N = 188.7 trading days/yr, derived as: distinct trading dates &divide; calendar years spanned. This is a simple linear annualisation of the mean daily return (not geometric compounding).</li><li><b>Annual Volatility</b> = std(r<sub>t</sub>, ddof=1) &times; &radic;N &nbsp;|&nbsp; Sample standard deviation of daily returns annualised by &radic;N.</li><li><b>Sharpe Ratio</b> = (mean(r<sub>t</sub>) &minus; r<sub>f</sub>/N) / std(r<sub>t</sub>) &times; &radic;N &nbsp;|&nbsp; r<sub>f</sub> = 0.0% p.a. (risk-free rate). Penalises both upside and downside volatility equally.</li><li><b>Sortino Ratio</b> = (mean(r<sub>t</sub>) &minus; r<sub>f</sub>/N) / DD &times; &radic;N &nbsp;|&nbsp; DD (downside deviation) = &radic;(mean(min(r<sub>t</sub>, 0)<sup>2</sup>)). Only penalises negative-return days; flat/zero days are treated as losses.</li><li><b>Max Drawdown</b> = min(equity<sub>t</sub> &minus; peak<sub>t</sub>) where peak<sub>t</sub> = max(equity<sub>0..t</sub>). Measured on the additive equity curve; path-dependent metrics use the largest contiguous segment.</li><li><b>Avg Drawdown Days</b> = mean length (trading days) of underwater episodes, where an episode starts when equity falls below its prior peak and ends when it fully recovers.</li><li><b>Calmar Ratio</b> = CAGR / |Max Drawdown|. Higher is better. Uses the largest contiguous segment for the drawdown.</li><li><b>Kelly Criterion</b> = W &minus; (1 &minus; W) / R &nbsp;|&nbsp; W = win rate (fraction of days with r<sub>t</sub> &gt; 0); R = avg winning return / avg |losing return|. Negative Kelly means do not size up on this setup.</li><li><b>Rolling Sharpe (63d)</b>: Sharpe formula applied over a rolling 63-trading-day window across the full series. The line starts once the first window fills. Stable values &gt; 1 indicate consistent performance.</li><li><b>Consecutive Wins/Losses</b>: longest streak of days with r &gt; 0 (wins) or r &le; 0 (losses) on the largest contiguous segment.</li><li><b>Broker whitelist:</b> only rows with broker in {GyandeepStocks, Kredent, MastertrustPro, SISL, VT_Capital} (case-insensitive) are retained across ALL algos before any scaling, aggregation, or return calculation. All other brokers are excluded.</li><li><b>Processed data columns (Excel):</b> PNL% = (sum_mtm / sum_allocation) &times; 100 &nbsp;|&nbsp; Base Capital = 10,000,000 (fixed 1&nbsp;crore) &nbsp;|&nbsp; Absolute PNL = (sum_mtm / sum_allocation) &times; Base Capital. These columns show what you would have earned/lost on a 1-crore base capital.</li><li><b>Data quality:</b> rows in = 106,013 | broker-excluded (not in whitelist) = 102,364 | unparseable date = 0 | null mtm = 0 | null/&le;0 allocation = 0 | duplicate (user, algo, date) = 0.</li></ul></footer></div><button id='toTop' class='toTop' title='Back to top'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 15 12 9 18 15"/></svg></button><script id='reportData' type='application/json'>{"params":{"nPerYear":188.65017064846418,"rollingWindow":63,"maxGapDays":3,"allocScale":100},"dateMin":"2024-04-12","dateMax":"2026-05-29","calendar":["2024-01-01","2024-01-02","2024-01-03","2024-01-04","2024-01-09","2024-01-10","2024-01-11","2024-01-16","2024-01-17","2024-01-18","2024-01-19","2024-01-23","2024-01-24","2024-01-25","2024-01-30","2024-01-31","2024-02-01","2024-02-02","2024-02-06","2024-02-07","2024-02-08","2024-02-09","2024-02-13","2024-02-14","2024-02-15","2024-02-16","2024-02-20","2024-02-21","2024-02-22","2024-02-23","2024-02-27","2024-02-29","2024-03-01","2024-03-05","2024-03-06","2024-03-07","2024-03-12","2024-03-13","2024-03-14","2024-03-15","2024-03-19","2024-03-20","2024-03-21","2024-03-22","2024-03-26","2024-03-27","2024-03-28","2024-04-02","2024-04-03","2024-04-04","2024-04-05","2024-04-09","2024-04-10","2024-04-12","2024-04-16","2024-04-18","2024-05-28","2024-05-29","2024-05-30","2024-05-31","2024-06-03","2024-06-05","2024-06-06","2024-06-07","2024-06-10","2024-06-11","2024-06-12","2024-06-13","2024-06-14","2024-06-18","2024-06-19","2024-06-20","2024-06-21","2024-06-24","2024-06-25","2024-06-26","2024-06-27","2024-06-28","2024-07-01","2024-07-02","2024-07-03","2024-07-04","2024-07-05","2024-07-08","2024-07-09","2024-07-10","2024-07-11","2024-07-12","2024-07-15","2024-07-16","2024-07-18","2024-07-19","2024-07-22","2024-07-23","2024-07-24","2024-07-25","2024-07-26","2024-07-29","2024-07-30","2024-07-31","2024-08-01","2024-08-02","2024-08-05","2024-08-06","2024-08-07","2024-08-08","2024-08-09","2024-08-12","2024-08-13","2024-08-14","2024-08-16","2024-08-19","2024-08-20","2024-08-21","2024-08-22","2024-08-23","2024-08-26","2024-08-27","2024-08-28","2024-08-29","2024-08-30","2024-09-02","2024-09-03","2024-09-04","2024-09-05","2024-09-06","2024-09-09","2024-09-10","2024-09-11","2024-09-12","2024-09-13","2024-09-16","2024-09-17","2024-09-18","2024-09-19","2024-09-20","2024-09-23","2024-09-24","2024-09-25","2024-09-26","2024-09-27","2024-09-30","2024-10-01","2024-10-03","2024-10-04","2024-10-07","2024-10-08","2024-10-09","2024-10-10","2024-10-11","2024-10-14","2024-10-15","2024-10-16","2024-10-17","2024-10-18","2024-10-21","2024-10-22","2024-10-23","2024-10-24","2024-10-25","2024-10-28","2024-10-29","2024-10-30","2024-10-31","2024-11-04","2024-11-05","2024-11-06","2024-11-07","2024-11-08","2024-11-11","2024-11-12","2024-11-13","2024-11-14","2024-11-18","2024-11-19","2024-11-21","2024-11-22","2024-11-25","2024-11-26","2024-11-27","2024-11-28","2024-11-29","2024-12-04","2024-12-05","2024-12-06","2024-12-11","2024-12-12","2024-12-13","2024-12-18","2024-12-19","2024-12-20","2024-12-23","2024-12-24","2024-12-26","2024-12-27","2024-12-30","2024-12-31","2025-01-01","2025-01-02","2025-01-03","2025-01-06","2025-01-07","2025-01-09","2025-01-14","2025-01-16","2025-01-21","2025-01-23","2025-01-28","2025-01-30","2025-02-04","2025-02-06","2025-02-11","2025-02-13","2025-02-18","2025-02-20","2025-02-25","2025-02-27","2025-03-04","2025-03-06","2025-03-10","2025-03-11","2025-03-12","2025-03-13","2025-03-17","2025-03-18","2025-03-19","2025-03-20","2025-03-24","2025-03-25","2025-03-26","2025-03-27","2025-04-01","2025-04-02","2025-04-03","2025-04-08","2025-04-09","2025-04-15","2025-04-17","2025-04-22","2025-04-24","2025-04-29","2025-04-30","2025-05-06","2025-05-08","2025-05-13","2025-05-15","2025-05-20","2025-05-22","2025-05-27","2025-05-29","2025-06-03","2025-06-05","2025-06-10","2025-06-12","2025-06-17","2025-06-19","2025-06-24","2025-06-26","2025-07-03","2025-07-08","2025-07-10","2025-07-15","2025-07-17","2025-07-21","2025-07-22","2025-07-23","2025-07-24","2025-07-28","2025-07-29","2025-07-30","2025-07-31","2025-08-04","2025-08-05","2025-08-06","2025-08-07","2025-08-11","2025-08-12","2025-08-13","2025-08-14","2025-08-18","2025-08-19","2025-08-20","2025-08-21","2025-08-25","2025-08-26","2025-08-28","2025-09-01","2025-09-02","2025-09-03","2025-09-04","2025-09-08","2025-09-09","2025-09-10","2025-09-11","2025-09-15","2025-09-16","2025-09-17","2025-09-18","2025-09-22","2025-09-23","2025-09-24","2025-09-25","2025-09-29","2025-09-30","2025-10-01","2025-10-06","2025-10-07","2025-10-08","2025-10-09","2025-10-13","2025-10-14","2025-10-15","2025-10-16","2025-10-17","2025-10-20","2025-10-23","2025-10-27","2025-10-28","2025-10-29","2025-10-30","2025-11-03","2025-11-04","2025-11-06","2025-11-10","2025-11-11","2025-11-12","2025-11-13","2025-11-17","2025-11-18","2025-11-19","2025-11-20","2025-11-24","2025-11-25","2025-11-26","2025-11-27","2025-12-01","2025-12-02","2025-12-03","2025-12-04","2025-12-05","2025-12-08","2025-12-09","2025-12-10","2025-12-11","2025-12-12","2025-12-15","2025-12-16","2025-12-17","2025-12-18","2025-12-19","2025-12-22","2025-12-23","2025-12-24","2025-12-26","2025-12-29","2025-12-30","2025-12-31","2026-01-01","2026-01-05","2026-01-06","2026-01-07","2026-01-08","2026-01-12","2026-01-13","2026-01-14","2026-01-16","2026-01-19","2026-01-20","2026-01-21","2026-01-22","2026-01-23","2026-01-27","2026-01-28","2026-01-29","2026-01-30","2026-02-01","2026-02-02","2026-02-03","2026-02-04","2026-02-05","2026-02-06","2026-02-09","2026-02-10","2026-02-11","2026-02-12","2026-02-13","2026-02-16","2026-02-17","2026-02-18","2026-02-19","2026-02-20","2026-02-23","2026-02-24","2026-02-25","2026-02-26","2026-02-27","2026-03-02","2026-03-04","2026-03-05","2026-03-06","2026-03-09","2026-03-10","2026-03-11","2026-03-12","2026-03-13","2026-03-16","2026-03-17","2026-03-18","2026-03-19","2026-03-20","2026-03-23","2026-03-24","2026-03-25","2026-03-27","2026-03-30","2026-04-01","2026-04-02","2026-04-06","2026-04-07","2026-04-08","2026-04-09","2026-04-10","2026-04-13","2026-04-15","2026-04-16","2026-04-17","2026-04-20","2026-04-21","2026-04-22","2026-04-23","2026-04-24","2026-04-27","2026-04-28","2026-04-29","2026-04-30","2026-05-04","2026-05-05","2026-05-06","2026-05-07","2026-05-08","2026-05-11","2026-05-12","2026-05-13","2026-05-14","2026-05-15","2026-05-18","2026-05-19","2026-05-20","2026-05-21","2026-05-22","2026-05-25","2026-05-26","2026-05-27","2026-05-29"],"algos":[{"id":"7","portfolio":[["2024-04-12",-0.0430595],["2024-04-16",0.013735227777777777],["2024-04-18",-0.122528],["2024-05-28",0.009421],["2024-05-29",0.0212281875],["2024-05-30",0.012005625],["2024-05-31",-0.00678625],["2024-06-03",-0.01231175],["2024-06-05",-0.01068447],["2024-06-06",-0.01031965],["2024-06-07",0.017498333333333334],["2024-06-10",0.01065275],["2024-06-11",0.00628094],["2024-06-12",0.01418316],["2024-06-13",0.00657065],["2024-06-14",0.0110341],["2024-06-18",-0.00799976],["2024-06-19",-0.00975324],["2024-06-20",0.00187435],["2024-06-21",-0.0062103],["2024-06-24",0.0099681],["2024-06-25",-0.02414936],["2024-06-26",0.02672501],["2024-06-27",-0.0090169],["2024-06-28",0.0045611666666666665],["2024-07-01",0.01417975],["2024-07-02",0.011595565217391305],["2024-07-03",0.020340608695652174],["2024-07-04",0.009303315217391304],["2024-07-05",0.005265],["2024-07-08",-0.0108955],["2024-07-09",0.0075113],["2024-07-10",0.0034821847826086954],["2024-07-11",-0.008664184782608695],["2024-07-12",-0.012352333333333333],["2024-07-15",-0.01223425],["2024-07-16",0.021084977272727273],["2024-07-18",-0.010387083333333333],["2024-07-19",0.006607833333333334],["2024-07-22",0.0103765],["2024-07-23",-0.014064242424242424],["2024-07-24",-0.009141659090909091],["2024-07-25",0.007779583333333334],["2024-07-26",0.008637],["2024-07-29",-0.011211],["2024-07-30",-0.011409071428571428],["2024-07-31",-0.00815265],["2024-08-01",0.012252607142857143],["2024-08-02",0.0113939],["2024-08-05",-0.00988515],["2024-08-06",-0.0005795357142857143],["2024-08-07",-0.010097464285714286],["2024-08-08",-0.010141178571428572],["2024-08-09",0.0264127],["2024-08-12",0.0132523125],["2024-08-13",0.009494214285714286],["2024-08-14",0.014339407142857143],["2024-08-16",-0.0111227],["2024-08-19",0.0056865],["2024-08-20",0.013934464285714286],["2024-08-21",-0.007883571428571429],["2024-08-22",0.0049539642857142855],["2024-08-23",0.0139494],["2024-08-26",0.0067047],["2024-08-27",-0.008091285714285714],["2024-08-28",0.009659271428571429],["2024-08-29",-0.021275],["2024-08-30",0.0226928],["2024-09-12",-0.0083416],["2024-09-25",0.016196025],["2024-09-26",-0.01259925],["2024-09-27",0.01328135],["2024-09-30",0.033150975],["2024-10-01",0.004679025],["2024-10-03",0.023611125],["2024-10-04",-0.00821435],["2024-10-07",-0.0144624],["2024-10-08",0.015938833333333333],["2024-10-09",-0.008474016666666667],["2024-10-10",0.0032433333333333333],["2024-10-11",0.0123383],["2024-10-14",0.00619895],["2024-10-15",-0.008109833333333333],["2024-10-16",0.01583455],["2024-10-17",0.01307825],["2024-10-18",-0.006950566666666666],["2024-10-21",0.0036946],["2024-10-22",-0.008406916666666667],["2024-10-23",0.0026868375],["2024-10-24",0.0088858125],["2024-10-25",-0.0051869],["2024-10-28",-0.0081545],["2024-10-29",-0.0083254],["2024-10-30",-0.01223615],["2024-10-31",0.007743966666666667],["2024-11-04",0.0242601],["2024-11-05",-0.00822375],["2024-11-06",0.0107228],["2024-11-07",0.010490416666666667],["2024-11-08",0.005660166666666667],["2024-11-11",-0.0063002],["2024-11-12",-0.008191666666666667],["2024-11-13",-0.0086159],["2024-11-14",0.009710866666666667],["2024-11-18",0.0283933],["2024-11-19",0.01421725],["2024-11-21",0.015525],["2024-11-22",-0.0187718],["2024-11-25",0.00602005],["2024-11-26",0.008787916666666666],["2024-11-27",-0.0090751],["2024-11-28",-0.0096005],["2024-11-29",-0.0082615],["2024-12-04",-0.00752225],["2024-12-05",-0.008055416666666667],["2024-12-06",0.0285968],["2024-12-11",0.00026108333333333333],["2024-12-12",0.0099535],["2024-12-13",-0.0143569],["2024-12-18",-0.008103083333333334],["2024-12-19",0.011537583333333334],["2024-12-20",-0.007383766666666666],["2024-12-23",0.0003238],["2024-12-24",-0.002749619565217391],["2024-12-26",0.0009315579710144927],["2024-12-27",0.0282895],["2024-12-30",-0.008235575],["2024-12-31",0.02193179347826087],["2025-01-01",-0.008064],["2025-01-02",0.028154839285714287],["2025-01-03",-0.0040877401960784316],["2025-01-06",-0.0096997],["2025-01-07",-0.00128892],["2025-01-09",-0.007606614583333333],["2025-01-14",0.0043825],["2025-01-16",0.005656875],["2025-01-21",-0.0077195],["2025-01-23",0.008964010416666666],["2025-01-28",-0.00791726],["2025-01-30",0.016907107142857144],["2025-02-04",-0.00542372],["2025-02-06",0.019144010416666666],["2025-02-11",0.013927208333333333],["2025-02-13",-0.007499517857142857],["2025-02-18",0.01975144],["2025-02-20",0.016667142857142856],["2025-02-25",0.01461736],["2025-02-27",0.0054115625],["2025-03-04",0.0007709074074074074],["2025-03-06",-0.00764703947368421],["2025-03-11",0.007626803571428572],["2025-03-13",0.008280197368421052],["2025-03-18",0.012223160714285714],["2025-03-20",-0.006274786184210526],["2025-03-25",-0.008147910714285713],["2025-03-27",0.011423462837837838],["2025-04-01",-0.007143518518518519],["2025-04-03",0.0080953125],["2025-04-08",-0.013322178571428572],["2025-04-09",0.045076766826923076],["2025-04-15",0.028989488372093024],["2025-04-17",-0.007011191037735849],["2025-04-22",0.007562616279069768],["2025-04-24",-0.007529186320754717],["2025-04-29",-0.0026436037735849058],["2025-04-30",-0.008184732142857143],["2025-05-06",0.008689801886792452],["2025-05-08",0.006926428571428571],["2025-05-13",-0.009199330188679244],["2025-05-15",-0.008406964285714285],["2025-05-20",0.011042575471698114],["2025-05-22",0.01363659375],["2025-05-27",-0.01072321],["2025-05-29",0.01525384375],["2025-06-03",-0.00946011],["2025-06-05",-0.0089263125],["2025-06-10",-0.007882425925925926],["2025-06-12",-0.00747310546875],["2025-06-17",0.009038279411764705],["2025-06-19",0.0031578125],["2025-06-24",-0.009149480769230769],["2025-06-26",-0.010162916666666667],["2025-07-03",-0.009419875],["2025-07-08",0.029409333333333332],["2025-07-10",-0.012565875],["2025-07-15",0.00465326],["2025-07-17",0.0129905625],["2025-07-22",-0.003743688679245283],["2025-07-24",0.013354186643835617],["2025-07-29",0.002061111111111111],["2025-07-31",-0.0006398715277777777],["2025-08-05",0.013114076388888889],["2025-08-07",-0.008480390625],["2025-08-12",-0.008033631944444444],["2025-08-14",0.0031504427083333332],["2025-08-19",0.006062576388888889],["2025-08-21",-0.0020232552083333335],["2025-08-26",0.010378409722222223],["2025-08-28",-0.009878446180555556],["2025-09-02",0.012979713541666667],["2025-09-04",-0.00032871527777777776],["2025-09-09",0.006958255208333333],["2025-09-11",0.009246083333333334],["2025-09-16",0.018448098958333332],["2025-09-18",0.011778020547945205],["2025-09-23",-0.00847060787671233],["2025-09-25",0.014709048611111112],["2025-09-30",-0.008619102430555555],["2025-10-01",0.007037840277777777],["2025-10-07",-0.007995286458333334],["2025-10-09",-0.005394326388888889],["2025-10-14",0.01029375],["2025-10-16",0.0066002986111111115],["2025-10-20",-0.0016776302083333333],["2025-10-23",0.014668623287671233],["2025-10-28",-0.011438299657534247],["2025-10-30",-0.0020048561643835616],["2025-11-04",0.015019340753424657],["2025-11-06",0.008875609589041097],["2025-11-11",0.004915145547945206],["2025-11-13",-0.0008412534246575342],["2025-11-18",0.00789611301369863],["2025-11-20",0.0011949603174603175],["2025-11-25",0.004142298387096774],["2025-11-27",-0.005761375],["2025-12-02",0.01762382462686567],["2025-12-04",0.0030814179104477614],["2025-12-09",-0.006574301470588235],["2025-12-11",-0.007815582089552239],["2025-12-16",0.0063965900735294115],["2025-12-18",0.0004558208955223881],["2025-12-23",0.004492444852941177],["2025-12-24",0.008769147058823529],["2025-12-30",-0.008108465073529412],["2026-01-01",0.00045825],["2026-01-06",-0.002738889705882353],["2026-01-08",0.020910367647058822],["2026-01-13",-0.008265332089552239],["2026-01-14",-0.007952619402985075],["2026-01-20",0.034069774253731346],["2026-01-22",-0.007863611940298507],["2026-01-27",-0.00887773880597015],["2026-01-29",0.0009376194029850747],["2026-02-03",-0.01570036194029851],["2026-02-05",0.0037658410714285716],["2026-02-10",0.0014964015625],["2026-02-12",0.011751734567901235],["2026-02-17",-0.0039868765625],["2026-02-19",0.0277098515625],["2026-02-24",-0.007553503086419753],["2026-02-26",-0.007765682926829268],["2026-03-02",-0.0005005],["2026-03-05",-0.005228685185185185],["2026-03-10",-0.005904126543209876],["2026-03-12",-0.0034757037037037035],["2026-03-17",-0.00854619598765432],["2026-03-19",0.019317625],["2026-03-24",-0.006456365740740741],["2026-03-25",0.01017883950617284],["2026-03-30",-0.005184498456790123],["2026-04-02",0.009996113636363636],["2026-04-07",0.0021195416666666667],["2026-04-09",0.005133265432098765],["2026-04-13",0.03569047685185185],["2026-04-16",0.0013513780487804878],["2026-04-21",0.009683513719512196],["2026-04-23",-0.008180770588235294],["2026-04-27",-0.00025488125],["2026-04-28",5.7819767441860464e-05],["2026-04-29",-0.00031709375],["2026-04-30",0.0066739941860465115],["2026-05-04",-0.003193211666666667],["2026-05-05",-0.0067961705882352945],["2026-05-06",0.0003993625],["2026-05-07",-0.008050372093023256],["2026-05-08",-8.811562499999999e-05],["2026-05-11",-0.000539703125],["2026-05-12",0.04544590261627907],["2026-05-13",-0.00131523125],["2026-05-14",-0.006669674418604651],["2026-05-15",-0.000387075],["2026-05-18",0.0019299583333333334],["2026-05-19",1.6670588235294118e-05],["2026-05-20",0.0013173666666666667],["2026-05-21",-0.0003445111111111111],["2026-05-22",-0.0005342607142857143],["2026-05-25",-0.001623613333333333],["2026-05-26",0.016148275],["2026-05-27",0.003929436842105263],["2026-05-29",0.00053226875]]},{"id":"19","portfolio":[["2025-12-03",-0.000999905],["2025-12-04",0.000760785],["2025-12-05",0.005732455],["2025-12-08",-0.00759133],["2025-12-09",0.013912775],["2025-12-10",0.003070695],["2025-12-11",-0.0051607825],["2025-12-12",0.004372455],["2025-12-15",-0.003373955],["2025-12-16",0.008234317500000001],["2025-12-17",0.00690697],["2025-12-18",0.0060388525000000005],["2025-12-19",0.003350955],["2025-12-22",0.0045925325],["2025-12-23",0.00752104],["2025-12-24",0.00523658],["2025-12-26",0.01192693],["2025-12-29",0.020876167499999997],["2025-12-30",0.0099266675],["2026-01-12",0.000589775],["2026-01-13",-0.008663405],["2026-01-14",-0.0042834375],["2026-01-16",-0.0037125800000000005],["2026-01-19",0.00959243],["2026-01-20",0.020342995000000003],["2026-01-21",-0.00051499],["2026-01-22",-0.009728705],["2026-01-23",0.0063129449999999995],["2026-01-27",-0.0044146225],["2026-01-28",-0.007592414999999999],["2026-01-29",-0.0034840625],["2026-01-30",-0.014183335],["2026-02-01",-0.0015774775],["2026-02-02",0.003275675],["2026-02-03",0.0005489225],["2026-02-04",0.0008977825],["2026-02-05",0.010705619999999999],["2026-02-06",0.0018063925],["2026-02-09",0.0009184575000000001],["2026-02-10",0.0156933075],["2026-02-11",0.0063106125],["2026-02-12",0.00466821],["2026-02-13",0.015631864999999998],["2026-02-16",-0.01961542],["2026-02-17",0.003053065],["2026-02-18",0.0064221],["2026-02-19",-0.008709975],["2026-02-20",-0.018084605],["2026-02-23",-0.0074983325],["2026-02-24",0.01435584],["2026-02-25",-0.0027277],["2026-02-26",0.0033409625],["2026-02-27",0.01502561],["2026-03-02",0.021863835],["2026-03-04",-0.01521964],["2026-03-05",0.0081914675],["2026-03-06",-0.014353105],["2026-03-09",0.0046104425],["2026-03-10",0.021521815],["2026-03-11",0.0061759975],["2026-03-12",0.019313105],["2026-03-13",0.0214652925],["2026-03-16",-0.0170854575],["2026-03-17",0.0049542449999999995],["2026-03-18",0.0148092225],["2026-03-19",-0.0759249625],["2026-03-20",-0.0015495675],["2026-03-23",0.0149974775],["2026-03-24",-0.023213765],["2026-03-25",0.008744765],["2026-03-27",0.041606],["2026-03-30",0.06627366750000001],["2026-04-02",0.008986335],["2026-04-06",0.0246585525],["2026-04-07",0.021281776250000002],["2026-04-08",0.027599505],["2026-04-09",-0.024293791250000002],["2026-04-10",-0.0018317974999999998],["2026-04-13",-0.0630499025],["2026-04-15",-0.00340737],["2026-04-16",-0.0087925625],["2026-04-17",0.0018512325000000001],["2026-04-20",-0.008348995],["2026-04-21",0.013175842499999998],["2026-04-22",0.00400848],["2026-04-23",-0.004122565],["2026-04-24",0.01598868125],["2026-04-27",-0.0074763699999999995],["2026-04-28",0.02828071875],["2026-04-29",-0.009628194999999999],["2026-04-30",0.0018641375],["2026-05-04",-0.0039328375],["2026-05-05",0.0015190924999999998],["2026-05-06",-0.00498627],["2026-05-07",-0.00152838],["2026-05-08",-0.0002913625],["2026-05-11",0.009401264999999999],["2026-05-12",0.04776347375],["2026-05-13",-0.0120096025],["2026-05-14",-0.00865359875],["2026-05-15",-0.0074804037500000005],["2026-05-18",-0.00683572],["2026-05-19",0.01132056625],["2026-05-20",-0.01010257],["2026-05-21",-0.012824215],["2026-05-22",-0.004645025],["2026-05-25",0.0018347150000000002],["2026-05-26",-0.0044265983333333335],["2026-05-27",0.0124995325],["2026-05-29",0.016680903333333334]]}]}</script><script>
+(function(){
+  var ROOT=document.getElementById('reportData'); if(!ROOT) return;
+  var DATA=JSON.parse(ROOT.textContent);
+  var P=DATA.params, N=P.nPerYear, WIN=P.rollingWindow, MAXGAP=P.maxGapDays;
+  var CAL={}; DATA.calendar.forEach(function(d,i){ CAL[d]=i; });
+  function toMs(iso){ return Date.parse(iso); }
+  var DMIN=toMs(DATA.dateMin), DMAX=toMs(DATA.dateMax);
+  var gFrom=DMIN, gTo=DMAX;
+
+  /* ---- math helpers ---- */
+  function mean(a){ if(!a.length) return NaN; var s=0; for(var i=0;i<a.length;i++) s+=a[i]; return s/a.length; }
+  function sstd(a){ if(a.length<2) return NaN; var m=mean(a),s=0; for(var i=0;i<a.length;i++){var d=a[i]-m; s+=d*d;} return Math.sqrt(s/(a.length-1)); }
+  function filt(pts,from,to){ var o=[]; for(var i=0;i<pts.length;i++){var t=toMs(pts[i][0]); if(t>=from&&t<=to) o.push(pts[i]);} return o; }
+  function segs(pts){ if(!pts.length) return []; var out=[],start=0;
+    for(var i=1;i<pts.length;i++){ var g=CAL[pts[i][0]]-CAL[pts[i-1][0]]-1; if(g>MAXGAP){ out.push(pts.slice(start,i)); start=i; } }
+    out.push(pts.slice(start)); return out; }
+  function largest(ss){ if(!ss.length) return []; var b=ss[0]; for(var i=1;i<ss.length;i++) if(ss[i].length>b.length) b=ss[i]; return b; }
+
+  function metrics(pts){
+    var m={n:pts.length,from:null,to:null,segs:1,breaks:false,equity:[],rolling:[],
+           cagr:NaN,cumret:NaN,sharpe:NaN,sortino:NaN,calmar:NaN,vol:NaN,
+           maxdd:NaN,avgddays:0,maxwins:0,maxlosses:0,kelly:NaN,rolllast:NaN};
+    if(!pts.length) return m;
+    m.from=pts[0][0]; m.to=pts[pts.length-1][0];
+    var r=pts.map(function(p){return p[1];});
+    var mu=mean(r), sd=sstd(r);
+    m.cumret=r.reduce(function(a,b){return a+b;},0);
+    m.cagr=mu*N;
+    m.vol=(pts.length<2)?NaN:sd*Math.sqrt(N);
+    m.sharpe=(pts.length<2||!(sd>0))?NaN:mu/sd*Math.sqrt(N);
+    var dn=0; for(var i=0;i<r.length;i++){ if(r[i]<0) dn+=r[i]*r[i]; } dn=Math.sqrt(dn/r.length);
+    m.sortino=(pts.length<2||!(dn>0))?NaN:mu/dn*Math.sqrt(N);
+    var cum=0; for(var i=0;i<pts.length;i++){ cum+=pts[i][1]; m.equity.push([toMs(pts[i][0]),cum*100]); }
+    var ss=segs(pts); m.segs=ss.length; m.breaks=ss.length>1;
+    var seg=largest(ss), sr=seg.map(function(p){return p[1];});
+    var eq=0,peak=0,maxdd=0,runs=[],cur=0;
+    for(var i=0;i<sr.length;i++){ eq+=sr[i]; if(eq>peak) peak=eq; var d=eq-peak; if(d<maxdd) maxdd=d;
+      if(eq<peak-1e-12){cur++;} else {if(cur>0){runs.push(cur);cur=0;}} }
+    if(cur>0) runs.push(cur);
+    m.maxdd=seg.length?maxdd:NaN;
+    m.avgddays=runs.length?mean(runs):0;
+    m.calmar=(maxdd===0||isNaN(m.cagr))?NaN:m.cagr/Math.abs(maxdd);
+    var w=0,bw=0,l=0,bl=0;
+    for(var i=0;i<sr.length;i++){ if(sr[i]>0){w++;if(w>bw)bw=w;l=0;}else{l++;if(l>bl)bl=l;w=0;} }
+    m.maxwins=bw; m.maxlosses=bl;
+    var wins=r.filter(function(x){return x>0;}), loss=r.filter(function(x){return x<=0;});
+    var aw=wins.length?mean(wins):0, al=loss.length?Math.abs(mean(loss)):0;
+    m.kelly=(al===0||aw===0)?NaN:(wins.length/r.length)-(1-wins.length/r.length)/(aw/al);
+    if(r.length>=WIN){
+      var rs=[];
+      for(var i=WIN-1;i<r.length;i++){ var win=r.slice(i-WIN+1,i+1); var s=sstd(win); var v=(s>0)?mean(win)/s*Math.sqrt(N):NaN;
+        if(!isNaN(v)){rs.push(v); m.rolling.push([toMs(pts[i][0]),v]);} }
+      if(rs.length) m.rolllast=rs[rs.length-1];
+    }
+    return m;
+  }
+
+  /* ---- formatters ---- */
+  function fpct(x){ return (x==null||isNaN(x))?'—':(x*100).toFixed(2)+'%'; }
+  function fratio(x){ return (x==null||isNaN(x))?'—':x.toFixed(2); }
+  function fint(x){ return (x==null||isNaN(x))?'0':String(Math.round(x)); }
+  function fdays(x){ return (x==null||isNaN(x))?'—':x.toFixed(1); }
+  var FMT={cagr:fpct,cumret:fpct,sharpe:fratio,sortino:fratio,calmar:fratio,vol:fpct,
+           maxdd:fpct,avgddays:fdays,maxwins:fint,maxlosses:fint,kelly:fpct,rolllast:fratio};
+  var SIGN={cagr:1,cumret:1,sharpe:1,sortino:1,calmar:1,maxdd:-1};
+  function cls(k,x){ if(k in SIGN){if(SIGN[k]<0) return 'neg'; if(x>0) return 'pos'; if(x<0) return 'neg';} return ''; }
+  function fdate(ms){ var d=new Date(ms); var M=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+    return ('0'+d.getUTCDate()).slice(-2)+' '+M[d.getUTCMonth()]+' '+d.getUTCFullYear(); }
+
+  /* ---- canvas chart ---- */
+  var TIP=document.createElement('div'); TIP.className='ch-tip'; document.body.appendChild(TIP);
+  function Chart(canvas){
+    var c=canvas, ctx=c.getContext('2d'); var self={canvas:c,series:[],yfmt:fratio,xMin:DMIN,xMax:DMAX};
+    self.setDomain=function(a,b){ if(a!=null&&b!=null&&b>a){self.xMin=a;self.xMax=b;} else {self.xMin=gFrom;self.xMax=gTo;} };
+    function size(){ var w=c.clientWidth||560,h=parseInt(c.dataset.h||'220',10),dpr=window.devicePixelRatio||1;
+      c.width=w*dpr; c.height=h*dpr; ctx.setTransform(dpr,0,0,dpr,1,1); return {w:w,h:h}; }
+    function draw(){
+      var d=size(),w=d.w,h=d.h; ctx.clearRect(0,0,w,h);
+      var mL=52,mR=10,mT=12,mB=22,iw=w-mL-mR,ih=h-mT-mB;
+      var from=self.xMin,to=self.xMax,span=(to-from)||1;
+      var vis=[]; self.series.forEach(function(s){ s.points.forEach(function(p){ if(p[0]>=from&&p[0]<=to) vis.push(p[1]); }); });
+      if(!vis.length){ctx.fillStyle='#8a93a3';ctx.font='12px sans-serif';ctx.fillText('No data in range',mL,mT+20);return;}
+      var lo=Math.min.apply(null,vis),hi=Math.max.apply(null,vis); if(self.zeroBase&&lo>0)lo=0; if(self.zeroBase&&hi<0)hi=0;
+      if(hi===lo){hi+=1;lo-=1;} var pad=(hi-lo)*0.08; lo-=pad; hi+=pad;
+      self._map={mL:mL,mT:mT,iw:iw,ih:ih,from:from,span:span,lo:lo,hi:hi};
+      function X(t){return mL+iw*(t-from)/span;} function Y(v){return mT+ih*(1-(v-lo)/(hi-lo));}
+      ctx.strokeStyle='#eef1f6';ctx.lineWidth=1;ctx.fillStyle='#8a93a3';ctx.font='10px monospace';ctx.textAlign='end';
+      for(var t=0;t<5;t++){var v=lo+(hi-lo)*t/4,y=Y(v);ctx.beginPath();ctx.moveTo(mL,y);ctx.lineTo(w-mR,y);ctx.stroke();ctx.fillText(self.yfmt(v),mL-5,y+3);}
+      if(lo<0&&hi>0){var yz=Y(0);ctx.strokeStyle='#c2c9d6';ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(mL,yz);ctx.lineTo(w-mR,yz);ctx.stroke();ctx.setLineDash([]);}
+      ctx.textAlign='center';
+      [from,from+span/2,to].forEach(function(t){var dd=new Date(t);ctx.fillText(dd.toISOString().slice(0,10),X(t),h-7);});
+      self.series.forEach(function(s){ctx.strokeStyle=s.color;ctx.lineWidth=1.7;ctx.beginPath();var started=false;
+        for(var i=0;i<s.points.length;i++){var p=s.points[i];if(p[0]<from||p[0]>to) continue;var px=X(p[0]),py=Y(p[1]);
+          if(!started){ctx.moveTo(px,py);started=true;}else ctx.lineTo(px,py);}ctx.stroke();});
+      var lx=mL+4,ly=mT+8;ctx.textAlign='start';ctx.font='11px sans-serif';
+      self.series.forEach(function(s){ctx.fillStyle=s.color;ctx.fillRect(lx,ly-7,10,3);ctx.fillStyle='#5b6678';ctx.fillText(s.name,lx+14,ly-2);lx+=24+7*s.name.length;});
+    }
+    self.render=function(series){self.series=series;draw();};
+    self.redraw=draw;
+    var dragging=false,dragX0=0,dragX1=0;
+    function evX(e){var r=c.getBoundingClientRect();return (e.clientX||(e.touches&&e.touches[0].clientX))-r.left;}
+    function xToMs(x){var mp=self._map;if(!mp) return null;return mp.from+(x-mp.mL)/mp.iw*mp.span;}
+    c.addEventListener('mousedown',function(e){dragging=true;dragX0=dragX1=evX(e);});
+    c.addEventListener('mousemove',function(e){
+      var x=evX(e);
+      if(dragging){dragX1=x;draw();var mp=self._map;if(mp){ctx.fillStyle='rgba(37,99,235,.12)';ctx.fillRect(Math.min(dragX0,dragX1),mp.mT,Math.abs(dragX1-dragX0),mp.ih);}return;}
+      var mp=self._map;if(!mp||!self.series.length){TIP.style.display='none';return;}
+      var t=xToMs(x),best=null,bestd=1e15,bestS=null;
+      self.series.forEach(function(s){for(var i=0;i<s.points.length;i++){var p=s.points[i];if(p[0]<self.xMin||p[0]>self.xMax) continue;var dd=Math.abs(p[0]-t);if(dd<bestd){bestd=dd;best=p;bestS=s;}}});
+      if(best){TIP.style.display='block';TIP.style.left=(e.clientX+12)+'px';TIP.style.top=(e.clientY+12)+'px';
+        var rows=self.series.map(function(s){var pt=null;for(var i=0;i<s.points.length;i++)if(s.points[i][0]===best[0]){pt=s.points[i];break;}
+          return pt?('<span style="color:'+s.color+'">●</span> '+s.name+': '+self.yfmt(pt[1])):'';}).filter(Boolean).join('<br>');
+        TIP.innerHTML='<b>'+fdate(best[0])+'</b><br>'+rows;}
+    });
+    c.addEventListener('mouseleave',function(){TIP.style.display='none';if(dragging){dragging=false;draw();}});
+    window.addEventListener('mouseup',function(e){
+      if(!dragging)return;dragging=false;var a=xToMs(Math.min(dragX0,dragX1)),b=xToMs(Math.max(dragX0,dragX1));
+      if(a!=null&&b!=null&&Math.abs(dragX1-dragX0)>6){apply(Math.max(DMIN,a),Math.min(DMAX,b));}else draw();});
+    c.addEventListener('dblclick',function(){apply(DMIN,DMAX);});
+    c.addEventListener('wheel',function(e){e.preventDefault();var mp=self._map;if(!mp)return;var t=xToMs(evX(e));
+      var f=(e.deltaY>0)?1.2:0.8;var nf=t-(t-self.xMin)*f,nt=t+(self.xMax-t)*f;apply(Math.max(DMIN,nf),Math.min(DMAX,nt));},{passive:false});
+    return self;
+  }
+
+  var CH={};
+  document.querySelectorAll('canvas[data-chart]').forEach(function(cv){
+    var ch=Chart(cv); ch.zeroBase=(cv.dataset.chart==='equity');
+    ch.yfmt=(cv.dataset.chart==='equity')?function(v){return v.toFixed(0)+'%';}:fratio;
+    CH[cv.dataset.algo+'|'+cv.dataset.chart]=ch;
+  });
+
+  /* ---- DOM updates ---- */
+  var KEYS=['cagr','cumret','sharpe','sortino','calmar','vol','maxdd','avgddays','maxwins','maxlosses','kelly','rolllast'];
+  function setCell(algo,key,m){
+    var sel="[data-algo='"+CSS.escape(algo)+"'][data-metric='"+key+"']";
+    document.querySelectorAll(sel).forEach(function(td){
+      var v=m[key]; td.textContent=FMT[key](v); td.setAttribute('data-v',(v==null||isNaN(v))?'-Infinity':v);
+      td.classList.remove('pos','neg'); var c=cls(key,v); if(c) td.classList.add(c);
+    });
+  }
+
+  function apply(from,to){
+    from=Math.round(from);to=Math.round(to);if(to<from){var t=from;from=to;to=t;}
+    gFrom=from;gTo=to;
+    var fi=document.getElementById('dateFrom'),ti=document.getElementById('dateTo');
+    if(fi) fi.value=new Date(from).toISOString().slice(0,10);
+    if(ti) ti.value=new Date(to).toISOString().slice(0,10);
+    var rl=document.getElementById('rangeLabel');if(rl)rl.textContent=fdate(from)+'  –  '+fdate(to);
+
+    DATA.algos.forEach(function(a){
+      var pts=filt(a.portfolio,from,to);
+      var m=metrics(pts); KEYS.forEach(function(k){setCell(a.id,k,m);});
+      var dmin=Infinity,dmax=-Infinity;
+      if(m.equity.length){dmin=m.equity[0][0];dmax=m.equity[m.equity.length-1][0];}
+      var hasData=dmin!==Infinity; if(!hasData){dmin=from;dmax=to;}
+      var dcell=document.querySelector("[data-algo='"+CSS.escape(a.id)+"'][data-metric='days']");
+      if(dcell){dcell.textContent=m.n;dcell.setAttribute('data-v',m.n);}
+      var cov=document.querySelector(".cov[data-algo='"+CSS.escape(a.id)+"']");
+      if(cov){cov.textContent=hasData?(m.n+'d · '+fdate(dmin)+' – '+fdate(dmax)):'no data in range';}
+      var fl=document.querySelector(".algoflag[data-algo='"+CSS.escape(a.id)+"']");
+      if(fl){fl.className='flag algoflag'+(m.breaks?'':' ok');fl.setAttribute('data-algo',a.id);fl.textContent=m.breaks?('breaks: '+m.segs+' seg'):'continuous';}
+      var eq=CH[a.id+'|equity'];if(eq){eq.setDomain(dmin,dmax);eq.render([{name:'Portfolio',color:'#2563eb',points:m.equity}]);}
+      var ro=CH[a.id+'|rolling'];if(ro){ro.setDomain(dmin,dmax);ro.render([{name:'Rolling Sharpe',color:'#0d9488',points:m.rolling}]);}
+    });
+    var act=document.querySelector('th.sortable.asc, th.sortable.desc');if(act)act.click(),act.click();
+  }
+
+  /* ---- controls ---- */
+  function wirePresets(){
+    document.querySelectorAll('[data-range]').forEach(function(btn){
+      btn.addEventListener('click',function(){
+        document.querySelectorAll('[data-range]').forEach(function(b){b.classList.remove('active');});btn.classList.add('active');
+        var k=btn.getAttribute('data-range');var to=DMAX,from=DMIN;
+        if(k!=='all'){var d=new Date(DMAX);if(k==='1y')d.setFullYear(d.getFullYear()-1);else if(k==='6m')d.setMonth(d.getMonth()-6);
+          else if(k==='3m')d.setMonth(d.getMonth()-3);else if(k==='ytd')d=new Date(Date.UTC(new Date(DMAX).getUTCFullYear(),0,1));from=Math.max(DMIN,d.getTime());}
+        apply(from,to);
+      });
+    });
+    var fi=document.getElementById('dateFrom'),ti=document.getElementById('dateTo');
+    function fromInputs(){var a=fi.value?Date.parse(fi.value):DMIN,b=ti.value?Date.parse(ti.value):DMAX;
+      document.querySelectorAll('[data-range]').forEach(function(x){x.classList.remove('active');});apply(a,b);}
+    if(fi)fi.addEventListener('change',fromInputs);if(ti)ti.addEventListener('change',fromInputs);
+    var rs=document.getElementById('resetRange');if(rs)rs.addEventListener('click',function(){apply(DMIN,DMAX);
+      document.querySelectorAll('[data-range]').forEach(function(x){x.classList.remove('active');});
+      var ab=document.querySelector("[data-range='all']");if(ab)ab.classList.add('active');});
+    if(fi){fi.min=ti.min=new Date(DMIN).toISOString().slice(0,10);fi.max=ti.max=new Date(DMAX).toISOString().slice(0,10);}
+  }
+
+  document.querySelectorAll('.card-head').forEach(function(h){h.addEventListener('click',function(e){if(e.target.closest('a,button,input'))return;h.closest('.card').classList.toggle('collapsed');setTimeout(redrawAll,30);});});
+  function setAll(c){document.querySelectorAll('.card').forEach(function(x){x.classList.toggle('collapsed',c);});if(!c)setTimeout(redrawAll,30);}
+  var ea=document.getElementById('expandAll'),ca=document.getElementById('collapseAll');
+  if(ea)ea.addEventListener('click',function(){setAll(false);}); if(ca)ca.addEventListener('click',function(){setAll(true);});
+  function redrawAll(){for(var k in CH){CH[k].redraw();}}
+  window.addEventListener('resize',function(){clearTimeout(window.__rz);window.__rz=setTimeout(redrawAll,150);});
+  var box=document.getElementById('algoSearch');
+  if(box)box.addEventListener('input',function(){var q=box.value.trim().toLowerCase();
+    document.querySelectorAll('[data-algo-row]').forEach(function(el){el.style.display=(!q||el.getAttribute('data-algo-row').toLowerCase().indexOf(q)>-1)?'':'none';});});
+  document.querySelectorAll('th.sortable').forEach(function(th){th.addEventListener('click',function(){
+    var table=th.closest('table'),tbody=table.querySelector('tbody'),idx=Array.prototype.indexOf.call(th.parentNode.children,th);
+    var asc=!th.classList.contains('asc');table.querySelectorAll('th.sortable').forEach(function(o){o.classList.remove('asc','desc');});th.classList.add(asc?'asc':'desc');
+    var rows=Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+    rows.sort(function(a,b){var x=a.children[idx].getAttribute('data-v'),y=b.children[idx].getAttribute('data-v');var nx=parseFloat(x),ny=parseFloat(y);
+      if(!isNaN(nx)&&!isNaN(ny)) return asc?nx-ny:ny-nx;x=(x||'').toLowerCase();y=(y||'').toLowerCase();return asc?(x>y?1:x<y?-1:0):(x<y?1:x>y?-1:0);});
+    rows.forEach(function(r){tbody.appendChild(r);});});});
+  var top=document.getElementById('toTop');
+  if(top){window.addEventListener('scroll',function(){top.classList.toggle('show',window.scrollY>500);});top.addEventListener('click',function(){window.scrollTo({top:0,behavior:'smooth'});});}
+  wirePresets();
+  apply(DMIN,DMAX);
+})();
+</script></body></html>

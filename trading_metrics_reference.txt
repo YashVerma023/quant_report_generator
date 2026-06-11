@@ -1,0 +1,374 @@
+================================================================================
+         TRADING STRATEGY METRICS — COMPLETE REFERENCE GUIDE
+================================================================================
+
+This document covers 10 key performance metrics used to evaluate trading
+strategies. Each entry includes: Definition, Formula, Rating Scale, and
+Interpretation Notes.
+
+================================================================================
+1. CAGR — Compound Annual Growth Rate
+================================================================================
+
+DEFINITION:
+  The annualized rate at which an investment grows over a period of time,
+  assuming profits are reinvested. It smooths out volatility and gives a
+  single consistent annual growth figure.
+
+FORMULA:
+  CAGR = ( (Ending Value / Beginning Value) ^ (1 / Years) ) - 1
+
+  Example:
+    Starting Capital : Rs. 1,00,000
+    Ending Capital   : Rs. 2,00,000
+    Period           : 4 years
+    CAGR             = (2,00,000 / 1,00,000)^(1/4) - 1 = 18.92%
+
+RATING SCALE:
+  < 5%          : Poor       — Barely beating inflation
+  
+  10% – 20%     : Good       — Solid for equity strategies
+  20% – 35%     : Very Good  — Strong outperformance
+  35% – 50%     : Excellent  — Top-tier, but verify consistency
+  > 50%         : Suspicious — Likely overfitted or extreme risk taken
+
+NOTES:
+  - CAGR alone doesn't tell you how bumpy the ride was (use with Volatility)
+  - Higher CAGR with high drawdown is risky; check Calmar ratio together
+  - Benchmark: Nifty 50 historically delivers ~12-14% CAGR
+
+================================================================================
+2. CUMULATIVE RETURN
+================================================================================
+
+DEFINITION:
+  Total percentage gain (or loss) from the start to the end of a period.
+  Unlike CAGR, it does NOT annualize — it just shows the total overall gain.
+
+FORMULA:
+  Cumulative Return = ( (Ending Value - Starting Value) / Starting Value ) x 100
+
+  Example:
+    Start : Rs. 1,00,000  |  End : Rs. 2,50,000
+    Cumulative Return = (2,50,000 - 1,00,000) / 1,00,000 x 100 = 150%
+
+RATING SCALE (over a 3-year backtest):
+  < 20%         : Poor       — Barely growing
+  20% – 50%     : Below Avg  — Modest growth
+  50% – 100%    : Good       — Decent performance
+  100% – 200%   : Very Good  — Strong multi-year growth
+  200% – 400%   : Excellent  — Top-tier strategy
+  > 400%        : Suspicious — Validate carefully for overfitting
+
+NOTES:
+  - Always read Cumulative Return alongside the time period
+  - 100% in 10 years is very different from 100% in 1 year
+  - Pair with CAGR to understand per-year equivalent performance
+
+================================================================================
+3. SHARPE RATIO
+================================================================================
+
+DEFINITION:
+  Measures risk-adjusted return. It tells you how much excess return you
+  earn per unit of total risk (volatility). Higher = better.
+
+FORMULA:
+  Sharpe Ratio = (Portfolio Return - Risk-Free Rate) / Standard Deviation of Returns
+
+  Risk-Free Rate: Typically 6-7% in India (10-year G-Sec yield)
+
+  Example:
+    Annual Return    : 22%
+    Risk-Free Rate   : 6%
+    Std Deviation    : 14%
+    Sharpe           = (22 - 6) / 14 = 1.14
+
+RATING SCALE:
+  < 0           : Very Poor  — Losing money vs risk-free investment
+  0.0 – 0.5     : Poor       — Not compensating for risk taken
+  0.5 – 1.0     : Average    — Marginal risk-reward
+  1.0 – 1.5     : Good       — Solid risk-adjusted performance
+  1.5 – 2.0     : Very Good  — Strong strategy
+  2.0 – 3.0     : Excellent  — Exceptional performance
+  > 3.0         : Suspicious — May indicate overfitting or short backtest
+
+NOTES:
+  - Sharpe assumes returns are normally distributed (not always true)
+  - It penalizes both upside AND downside volatility equally
+  - Use Sortino Ratio alongside for a more accurate downside-only picture
+
+================================================================================
+4. SORTINO RATIO
+================================================================================
+
+DEFINITION:
+  A refined version of the Sharpe Ratio. It only penalizes downside
+  (negative) volatility, not upside gains. More realistic and fairer for
+  strategies with high positive outliers.
+
+FORMULA:
+  Sortino Ratio = (Portfolio Return - Risk-Free Rate) / Downside Deviation
+
+  Downside Deviation = Std Dev of only negative return days/periods
+
+  Example:
+    Annual Return      : 22%
+    Risk-Free Rate     : 6%
+    Downside Deviation : 8%
+    Sortino            = (22 - 6) / 8 = 2.0
+
+RATING SCALE:
+  < 0           : Very Poor  — Strategy is destroying capital on bad days
+  0.0 – 0.5     : Poor       — High downside risk, low reward
+  0.5 – 1.0     : Average    — Moderate downside management
+  1.0 – 1.5     : Good       — Acceptable downside risk profile
+  1.5 – 2.5     : Very Good  — Strong downside protection
+  2.5 – 3.5     : Excellent  — Near-ideal risk management
+  > 3.5         : Suspicious — Verify with more data
+
+NOTES:
+  - Sortino > Sharpe always (since denominator is smaller)
+  - Ideal for non-symmetric return strategies (momentum, trend-following)
+  - A Sortino of 2.0 with a Sharpe of 1.0 suggests good upside skew
+
+================================================================================
+5. CALMAR RATIO
+================================================================================
+
+DEFINITION:
+  Measures return relative to the worst loss you experienced. It answers:
+  "How much annual return am I getting for the worst pain I endured?"
+
+FORMULA:
+  Calmar Ratio = CAGR / Absolute Max Drawdown (in %)
+
+  Example:
+    CAGR           : 30%
+    Max Drawdown   : -20%
+    Calmar         = 30 / 20 = 1.5
+
+RATING SCALE:
+  < 0.5         : Very Poor  — Max drawdown is far too large vs returns
+  0.5 – 1.0     : Poor       — Drawdown not justified by returns
+  1.0 – 2.0     : Average    — Acceptable return-to-drawdown trade-off
+  2.0 – 3.0     : Good       — Strong performance with manageable pain
+  3.0 – 5.0     : Very Good  — Excellent risk-reward
+  > 5.0         : Excellent  — World-class; verify for overfitting
+
+NOTES:
+  - Calmar is very sensitive to the length of backtest period
+  - Shorter backtests may not have hit worst drawdown scenarios yet
+  - Best used with 3-5 years of data minimum
+
+================================================================================
+6. ANNUAL VOLATILITY
+================================================================================
+
+DEFINITION:
+  Measures how much the strategy's returns fluctuate year to year (or
+  annualized from daily/monthly data). Higher volatility = more uncertainty
+  and emotional stress for the trader.
+
+FORMULA:
+  Annual Volatility = Daily Std Dev of Returns x sqrt(252)
+
+  (252 = trading days in a year)
+
+  Example:
+    Daily Std Dev   : 1.2%
+    Annual Volatility = 1.2% x sqrt(252) = 1.2% x 15.87 = 19.04%
+
+RATING SCALE (for equity strategies):
+  < 5%          : Very Low   — Bond-like, possibly too conservative
+  5% – 10%      : Low        — Very stable, good for conservative traders
+  10% – 15%     : Moderate   — Typical for balanced/large-cap equity
+  15% – 25%     : High       — Aggressive strategy, needs strong nerves
+  25% – 40%     : Very High  — Stressful; ensure returns justify this
+  > 40%         : Extreme    — High risk of ruin; review position sizing
+
+NOTES:
+  - Low volatility alone is NOT good — pair it with returns (Sharpe ratio)
+  - Intraday strategies typically have lower annualized vol than daily
+  - Market (Nifty) volatility = roughly 14-18% in normal years
+
+================================================================================
+7. MAX DRAWDOWN
+================================================================================
+
+DEFINITION:
+  The largest peak-to-trough decline in portfolio value before a new peak
+  is reached. It represents the worst-case loss a trader would have suffered
+  if they entered at the peak and exited at the trough.
+
+FORMULA:
+  Max Drawdown = (Trough Value - Peak Value) / Peak Value x 100
+
+  Example:
+    Peak Value   : Rs. 2,00,000
+    Trough Value : Rs. 1,40,000
+    Max Drawdown = (1,40,000 - 2,00,000) / 2,00,000 x 100 = -30%
+
+RATING SCALE (lower is better):
+  0% – 5%       : Excellent  — Very rare; near-perfect capital protection
+  5% – 10%      : Very Good  — Outstanding drawdown control
+  10% – 20%     : Good       — Acceptable for most equity strategies
+  20% – 30%     : Average    — Requires strong conviction to hold through
+  30% – 50%     : Poor       — Very difficult to sustain psychologically
+  > 50%         : Very Poor  — Half your capital gone; unacceptable risk
+
+NOTES:
+  - Max Drawdown does NOT tell you how long the drawdown lasted (see below)
+  - Drawdown of 50% requires a 100% gain just to break even
+  - Most retail traders quit strategies during drawdown — stay disciplined
+
+================================================================================
+8. AVG DRAWDOWN DAYS
+================================================================================
+
+DEFINITION:
+  The average number of calendar/trading days the strategy spends in a
+  drawdown (below a previous equity peak). It measures recovery time.
+
+FORMULA:
+  Avg Drawdown Days = Sum of all drawdown durations / Number of drawdowns
+
+  Where each drawdown duration = Days from peak to recovery back to peak
+
+  Example:
+    3 drawdown periods of 10, 25, and 45 days
+    Avg Drawdown Days = (10 + 25 + 45) / 3 = 26.67 days
+
+RATING SCALE:
+  < 5 days      : Excellent  — Recovers almost immediately
+  5 – 15 days   : Very Good  — Short recoveries; low stress
+  15 – 30 days  : Good       — About 1-month average recovery
+  30 – 60 days  : Average    — 1-2 months underwater; needs patience
+  60 – 120 days : Poor       — Quarterly drawdowns; psychologically hard
+  > 120 days    : Very Poor  — Long underwater periods; strategy review needed
+
+NOTES:
+  - Short avg drawdown days + low max drawdown = robust strategy
+  - Long avg days even with low max drawdown suggests slow recovery
+  - Important for fund managers who face monthly/quarterly performance reviews
+
+================================================================================
+9. KELLY CRITERION
+================================================================================
+
+DEFINITION:
+  A mathematical formula that calculates the OPTIMAL fraction of your
+  capital to bet/invest on each trade to maximize long-term growth while
+  avoiding ruin. It balances aggression with safety.
+
+FORMULA:
+  Kelly % = W - ( (1 - W) / R )
+
+  Where:
+    W = Win Rate (probability of winning trade)
+    R = Win/Loss Ratio (average win amount / average loss amount)
+
+  Example:
+    Win Rate (W) : 55% = 0.55
+    Avg Win      : Rs. 2,000  |  Avg Loss: Rs. 1,000  =>  R = 2.0
+    Kelly %      = 0.55 - ((1 - 0.55) / 2.0)
+                 = 0.55 - 0.225
+                 = 0.325 = 32.5% per trade
+
+RATING SCALE (Recommended Kelly % per trade):
+  < 5%          : Very Conservative — Too small; minimal compounding
+  5% – 10%      : Conservative      — Safe starting range for new strategies
+  10% – 20%     : Moderate          — Balanced risk-reward, recommended zone
+  20% – 30%     : Aggressive        : High risk; use Half-Kelly at most
+  30% – 50%     : Very Aggressive   — Use only 1/4 Kelly; dangerous at full
+  > 50%         : Extreme           — Full Kelly here = near-certain ruin
+
+  PRACTICAL RULE: Most professionals use HALF-KELLY (Kelly / 2) to reduce
+  variance and protect against model estimation errors.
+
+NOTES:
+  - Kelly assumes constant win rate and R-ratio (rarely true in markets)
+  - Full Kelly leads to extreme volatility of equity curve
+  - Start with Half-Kelly or Quarter-Kelly in live trading
+  - Negative Kelly means: DO NOT take this trade setup at all
+
+================================================================================
+10. ROLLING SHARPE
+================================================================================
+
+DEFINITION:
+  The Sharpe Ratio calculated over a rolling window (e.g., 6-month or
+  1-year rolling window) across the entire backtest period. It shows whether
+  the strategy's risk-adjusted performance is CONSISTENT over time or only
+  good during certain periods.
+
+FORMULA:
+  Rolling Sharpe (at time T) =
+    (Avg Return over last N periods - Risk-Free Rate) /
+    Std Dev of Returns over last N periods
+
+  Annualized using: x sqrt(252) for daily data
+
+  Common windows: 63 days (3 months), 126 days (6 months), 252 days (1 year)
+
+RATING SCALE (for the Rolling Sharpe values across time):
+  Always Negative      : Very Poor  — Strategy consistently destroys value
+  Mostly < 0.5         : Poor       — Unreliable; high variability
+  Mostly 0.5 – 1.0     : Average    — Some good periods, some bad
+  Mostly 1.0 – 1.5     : Good       — Relatively stable performance
+  Mostly > 1.5         : Very Good  — Consistent outperformance
+  Stable & > 2.0       : Excellent  — Near-ideal consistency
+
+  KEY SIGNAL — CONSISTENCY CHECK:
+    High Variance in Rolling Sharpe : Strategy only works in certain regimes
+    Low Variance in Rolling Sharpe  : Strategy is robust across all conditions
+
+NOTES:
+  - A high average Sharpe but high variance in Rolling Sharpe = risky
+  - Look for strategies where Rolling Sharpe rarely goes below 0.5
+  - Rolling Sharpe dipping to negative for extended periods = strategy failure
+  - Best viewed as a time-series chart, not just a single number
+
+================================================================================
+                         QUICK REFERENCE SUMMARY TABLE
+================================================================================
+
+Metric              | Ideal Target     | Avoid If
+--------------------|------------------|----------------------------------
+CAGR                | 20% – 35%        | < 5% or > 50% (verify >50%)
+Cumulative Return   | 100% – 200% /3yr | < 20% over any 3-year period
+Sharpe Ratio        | > 1.5            | < 0.5
+Sortino Ratio       | > 2.0            | < 1.0
+Calmar Ratio        | > 2.0            | < 1.0
+Annual Volatility   | 10% – 20%        | > 40%
+Max Drawdown        | < 15%            | > 40%
+Avg Drawdown Days   | < 20 days        | > 90 days
+Kelly Criterion     | 10% – 20%        | > 30% full Kelly
+Rolling Sharpe      | Stable > 1.0     | Frequently negative or high variance
+
+================================================================================
+                             COMBINING METRICS
+================================================================================
+
+  A single metric never tells the full story. Use these combinations:
+
+  [1] RETURN QUALITY    : CAGR + Sharpe Ratio
+      -> High CAGR + High Sharpe = consistent, risk-adjusted gains
+
+  [2] DOWNSIDE SAFETY   : Max Drawdown + Calmar Ratio + Avg Drawdown Days
+      -> Low drawdown + High Calmar + Low days = capital protected well
+
+  [3] CONSISTENCY CHECK : Rolling Sharpe + Annual Volatility
+      -> Stable Rolling Sharpe + Low Vol = strategy works across regimes
+
+  [4] POSITION SIZING   : Kelly Criterion
+      -> Tells you HOW MUCH to bet; use with all other metrics
+
+  [5] FULL SCORECARD    : All 10 metrics together
+      -> No strategy should be deployed live on just 1-2 metrics alone
+
+================================================================================
+                                END OF DOCUMENT
+================================================================================
+Document: Trading Metrics Reference Guide
+Version : 1.0

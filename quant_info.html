@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Quant Metrics Reference Guide</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#0d1117;color:#e6edf3;line-height:1.6}
+a{color:#58a6ff}
+.page-header{background:linear-gradient(135deg,#161b22 0%,#1c2434 100%);border-bottom:1px solid #30363d;padding:2.5rem 2rem}
+.page-header h1{font-size:1.8rem;font-weight:700;color:#f0f6fc;margin-bottom:.4rem}
+.page-header p{color:#8b949e;font-size:.95rem}
+nav{background:#161b22;border-bottom:1px solid #21262d;padding:.6rem 2rem;display:flex;flex-wrap:wrap;gap:.5rem;font-size:.82rem}
+nav a{color:#8b949e;text-decoration:none;padding:.25rem .6rem;border-radius:4px;transition:all .15s}
+nav a:hover{background:#21262d;color:#e6edf3}
+.wrap{max-width:1100px;margin:0 auto;padding:2rem}
+.section-title{font-size:1.15rem;font-weight:700;color:#58a6ff;border-bottom:1px solid #21262d;padding-bottom:.5rem;margin-bottom:1.2rem;margin-top:2.5rem}
+.section-title:first-child{margin-top:0}
+
+/* Quick-reference grid */
+.quick-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.6rem;margin-bottom:1.5rem}
+.qcard{background:#161b22;border:1px solid #21262d;border-radius:8px;padding:.8rem 1rem}
+.qcard .label{font-size:.75rem;color:#8b949e;text-transform:uppercase;letter-spacing:.04em}
+.qcard .val{font-size:.9rem;font-weight:600;color:#f0f6fc;margin-top:.15rem}
+.qcard .sub{font-size:.75rem;color:#6e7681;margin-top:.1rem}
+
+/* Metric cards */
+.metric-card{background:#161b22;border:1px solid #21262d;border-radius:10px;margin-bottom:1.2rem;overflow:hidden}
+.metric-header{display:flex;align-items:center;gap:.8rem;padding:1rem 1.2rem;background:#1c2434;border-bottom:1px solid #21262d;cursor:pointer}
+.metric-num{width:2rem;height:2rem;border-radius:50%;background:#0d419d;color:#58a6ff;font-size:.8rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.metric-title{font-size:1rem;font-weight:600;color:#f0f6fc}
+.metric-body{padding:1.2rem}
+.def{color:#8b949e;font-size:.9rem;margin-bottom:.9rem}
+.formula-block{background:#0d1117;border:1px solid #21262d;border-radius:6px;padding:.9rem 1rem;font-family:'Courier New',monospace;font-size:.85rem;color:#79c0ff;margin-bottom:1rem;white-space:pre-wrap;overflow-x:auto}
+.rating-table{width:100%;border-collapse:collapse;font-size:.83rem;margin-bottom:.9rem}
+.rating-table th{background:#21262d;color:#8b949e;text-align:left;padding:.4rem .6rem;font-weight:600;font-size:.75rem;text-transform:uppercase}
+.rating-table td{padding:.35rem .6rem;border-top:1px solid #21262d}
+.rating-table tr:hover td{background:#1c2434}
+.badge{display:inline-block;padding:.1rem .45rem;border-radius:4px;font-size:.73rem;font-weight:600}
+.badge-excellent{background:#1a3a1a;color:#3fb950}
+.badge-very-good{background:#1a2e1a;color:#56d364}
+.badge-good{background:#1c2e10;color:#7ee787}
+.badge-average{background:#2d2000;color:#d29922}
+.badge-poor{background:#2d1000;color:#d18616}
+.badge-very-poor{background:#2d0000;color:#f85149}
+.badge-suspicious{background:#2d002d;color:#d2a8ff}
+.notes{background:#161b22;border-left:3px solid #388bfd;border-radius:0 6px 6px 0;padding:.7rem .9rem;font-size:.83rem;color:#8b949e}
+.notes b{color:#e6edf3}
+
+/* Data pipeline section */
+.pipeline-card{background:#161b22;border:1px solid #21262d;border-radius:10px;padding:1.2rem;margin-bottom:1rem}
+.pipeline-card h4{color:#f0f6fc;font-size:.95rem;margin-bottom:.5rem}
+.pipeline-card p{color:#8b949e;font-size:.87rem;margin-bottom:.4rem}
+.broker-list{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.5rem}
+.broker-tag{background:#1c2434;border:1px solid #21262d;color:#79c0ff;font-size:.8rem;padding:.2rem .55rem;border-radius:4px;font-family:'Courier New',monospace}
+.col-table{width:100%;border-collapse:collapse;font-size:.85rem;margin-top:.6rem}
+.col-table th{background:#21262d;color:#8b949e;text-align:left;padding:.45rem .7rem;font-weight:600;font-size:.75rem;text-transform:uppercase}
+.col-table td{padding:.4rem .7rem;border-top:1px solid #21262d;font-family:'Courier New',monospace;font-size:.82rem}
+.col-table tr:hover td{background:#1c2434}
+.col-table .col-name{color:#79c0ff}
+.col-table .col-formula{color:#e6edf3;font-family:'Segoe UI',sans-serif;font-size:.82rem}
+.col-table .col-example{color:#3fb950}
+
+/* Combining metrics */
+.combo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:.8rem}
+.combo-card{background:#161b22;border:1px solid #21262d;border-radius:8px;padding:.9rem 1rem}
+.combo-card .combo-label{font-size:.75rem;color:#8b949e;text-transform:uppercase;letter-spacing:.04em;margin-bottom:.3rem}
+.combo-card .combo-metrics{font-size:.85rem;color:#79c0ff;margin-bottom:.25rem}
+.combo-card .combo-desc{font-size:.8rem;color:#6e7681}
+
+footer{background:#0d1117;border-top:1px solid #21262d;padding:1.5rem 2rem;text-align:center;color:#6e7681;font-size:.8rem;margin-top:3rem}
+
+/* back-to-top */
+#btt{position:fixed;bottom:1.5rem;right:1.5rem;background:#21262d;border:1px solid #30363d;color:#8b949e;padding:.4rem .75rem;border-radius:6px;text-decoration:none;font-size:.8rem;opacity:0;pointer-events:none;transition:opacity .2s}
+#btt.visible{opacity:1;pointer-events:auto}
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>📊 Quant Metrics &amp; Data Pipeline — Reference Guide</h1>
+  <p>Complete reference for all performance metrics, processed data columns, and filtering rules used in the Algo Performance Report Generator.</p>
+</div>
+
+<nav>
+  <a href="#pipeline">Data Pipeline</a>
+  <a href="#metric-01">CAGR</a>
+  <a href="#metric-02">Cumulative Return</a>
+  <a href="#metric-03">Sharpe</a>
+  <a href="#metric-04">Sortino</a>
+  <a href="#metric-05">Calmar</a>
+  <a href="#metric-06">Annual Volatility</a>
+  <a href="#metric-07">Max Drawdown</a>
+  <a href="#metric-08">Avg Drawdown Days</a>
+  <a href="#metric-09">Kelly Criterion</a>
+  <a href="#metric-10">Rolling Sharpe</a>
+  <a href="#combining">Combining</a>
+</nav>
+
+<div class="wrap">
+
+  <!-- Quick Reference -->
+  <div class="section-title">Quick Reference</div>
+  <div class="quick-grid">
+    <div class="qcard"><div class="label">CAGR</div><div class="val">≥ 20% target</div><div class="sub">Avoid &lt; 5% or &gt; 50%</div></div>
+    <div class="qcard"><div class="label">Cumulative Return</div><div class="val">100–200% / 3 yr</div><div class="sub">Avoid &lt; 20% over 3 yr</div></div>
+    <div class="qcard"><div class="label">Sharpe Ratio</div><div class="val">&gt; 1.5 ideal</div><div class="sub">Avoid &lt; 0.5</div></div>
+    <div class="qcard"><div class="label">Sortino Ratio</div><div class="val">&gt; 2.0 ideal</div><div class="sub">Avoid &lt; 1.0</div></div>
+    <div class="qcard"><div class="label">Calmar Ratio</div><div class="val">&gt; 2.0 ideal</div><div class="sub">Avoid &lt; 1.0</div></div>
+    <div class="qcard"><div class="label">Annual Volatility</div><div class="val">10–20% sweet spot</div><div class="sub">Avoid &gt; 40%</div></div>
+    <div class="qcard"><div class="label">Max Drawdown</div><div class="val">&lt; 15% ideal</div><div class="sub">Avoid &gt; 40%</div></div>
+    <div class="qcard"><div class="label">Avg Drawdown Days</div><div class="val">&lt; 20 days ideal</div><div class="sub">Avoid &gt; 90 days</div></div>
+    <div class="qcard"><div class="label">Kelly Criterion</div><div class="val">10–20% moderate</div><div class="sub">Never use full &gt; 30%</div></div>
+    <div class="qcard"><div class="label">Rolling Sharpe</div><div class="val">Stable &gt; 1.0</div><div class="sub">Avoid frequent negatives</div></div>
+  </div>
+
+  <!-- =========================================================== -->
+  <!-- DATA PIPELINE                                                -->
+  <!-- =========================================================== -->
+  <div class="section-title" id="pipeline">Data Pipeline &amp; Processed Columns</div>
+
+  <div class="pipeline-card">
+    <h4>Step 1 — Broker Whitelist (applied before any aggregation)</h4>
+    <p>Only rows where <code>broker</code> (case-insensitive) matches one of the following 5 brokers are retained. All other brokers are dropped across every algo.</p>
+    <div class="broker-list">
+      <span class="broker-tag">GyandeepStocks</span>
+      <span class="broker-tag">Kredent</span>
+      <span class="broker-tag">MastertrustPro</span>
+      <span class="broker-tag">SISL</span>
+      <span class="broker-tag">VT_Capital</span>
+    </div>
+  </div>
+
+  <div class="pipeline-card">
+    <h4>Step 2 — Allocation Scaling</h4>
+    <p><code>processed_allocation = raw_allocation × 100</code></p>
+    <p>Raw allocation values in the source file represent 1% of actual capital. Multiplying by 100 gives the true rupee allocation for each user-algo-date record.</p>
+  </div>
+
+  <div class="pipeline-card">
+    <h4>Step 3 — Daily Aggregation (Processed Data Sheet)</h4>
+    <p>Rows are grouped by <code>(date, algo)</code>. The table below shows all columns in the <b>"processed data"</b> sheet of <code>Processed data.xlsx</code>.</p>
+    <table class="col-table">
+      <thead><tr><th>Column</th><th>Formula / Description</th><th>Example</th></tr></thead>
+      <tbody>
+        <tr><td class="col-name">date</td><td class="col-formula">Trading date (DD-MM-YYYY)</td><td class="col-example">01-01-2024</td></tr>
+        <tr><td class="col-name">algo</td><td class="col-formula">Algo identifier</td><td class="col-example">1</td></tr>
+        <tr><td class="col-name">sum_allocation</td><td class="col-formula">Σ processed_allocation across all users of this algo on this date</td><td class="col-example">316,000,000</td></tr>
+        <tr><td class="col-name">sum_mtm</td><td class="col-formula">Σ mtm_all across all users</td><td class="col-example">−551,473.5</td></tr>
+        <tr><td class="col-name">PNL%</td><td class="col-formula">(sum_mtm ÷ sum_allocation) × 100</td><td class="col-example">−0.17%</td></tr>
+        <tr><td class="col-name">Base Capital</td><td class="col-formula">Fixed constant = 1,00,00,000 (1 crore)</td><td class="col-example">1,00,00,000</td></tr>
+        <tr><td class="col-name">Absolute PNL</td><td class="col-formula">(sum_mtm ÷ sum_allocation) × Base Capital</td><td class="col-example">−17,451.69</td></tr>
+      </tbody>
+    </table>
+    <p style="margin-top:.7rem;font-size:.82rem;color:#6e7681">
+      <b>Interpretation:</b> <i>Absolute PNL</i> is the hypothetical rupee P&amp;L you would have made on a fixed ₹1 crore base capital. It standardises performance across algos with different actual allocation sizes. All metric calculations use the fractional daily return = PNL% ÷ 100 = sum_mtm ÷ sum_allocation.
+    </p>
+  </div>
+
+  <!-- =========================================================== -->
+  <!-- METRIC 01 — CAGR                                            -->
+  <!-- =========================================================== -->
+  <div class="section-title" id="metric-01">01. CAGR — Compound Annual Growth Rate</div>
+  <div class="metric-card">
+    <div class="metric-header"><div class="metric-num">01</div><div class="metric-title">CAGR — Compound Annual Growth Rate</div></div>
+    <div class="metric-body">
+      <p class="def">The annualised rate at which an investment grows over the period. Smooths volatility into a single consistent annual figure. Note: this implementation uses linear annualisation (mean daily return × N), not geometric compounding.</p>
+      <div class="formula-block">daily_return (r_t)  =  sum_mtm_t  ÷  sum_allocation_t
+
+N  =  distinct trading dates ÷ calendar years spanned
+
+CAGR  =  mean(r_t)  ×  N
+
+Displayed as percentage.  e.g.  CAGR = 0.0012 × 252 = 30.24%</div>
+      <table class="rating-table">
+        <thead><tr><th>Range</th><th>Rating</th><th>Interpretation</th></tr></thead>
+        <tbody>
+          <tr><td>&lt; 5%</td><td><span class="badge badge-very-poor">Poor</span></td><td>Barely beating inflation</td></tr>
+          <tr><td>5% – 10%</td><td><span class="badge badge-poor">Below Avg</span></td><td>Weak equity returns</td></tr>
+          <tr><td>10% – 20%</td><td><span class="badge badge-good">Good</span></td><td>Solid for equity strategies</td></tr>
+          <tr><td>20% – 35%</td><td><span class="badge badge-very-good">Very Good</span></td><td>Strong outperformance</td></tr>
+          <tr><td>35% – 50%</td><td><span class="badge badge-excellent">Excellent</span></td><td>Top-tier — verify consistency</td></tr>
+          <tr><td>&gt; 50%</td><td><span class="badge badge-suspicious">Suspicious</span></td><td>Likely overfitted or extreme risk</td></tr>
+        </tbody>
+      </table>
+      <div class="notes"><b>Notes:</b> CAGR alone doesn't reveal volatility. Pair with Sharpe. Benchmark: Nifty 50 ~12–14% CAGR historically. High CAGR with high drawdown is dangerous — check Calmar together.</div>
+    </div>
+  </div>
+
+  <!-- =========================================================== -->
+  <!-- METRIC 02 — CUMULATIVE RETURN                               -->
+  <!-- =========================================================== -->
+  <div class="section-title" id="metric-02">02. Cumulative Return</div>
+  <div class="metric-card">
+    <div class="metric-header"><div class="metric-num">02</div><div class="metric-title">Cumulative Return</div></div>
+    <div class="metric-body">
+      <p class="def">Total gain or loss from first to last date. Unlike CAGR, it does NOT annualise — it shows the total absolute gain. The equity curve is the running cumulative sum of daily returns.</p>
+      <div class="formula-block">Equity curve  =  cumsum(r_t)   (additive, not compounded)
+
+Cumulative Return  =  Σ r_t  =  equity_curve[-1]
+
+Displayed as percentage. e.g. 0.45 → 45%</div>
+      <table class="rating-table">
+        <thead><tr><th>Range (over ~3-yr backtest)</th><th>Rating</th><th>Interpretation</th></tr></thead>
+        <tbody>
+          <tr><td>&lt; 20%</td><td><span class="badge badge-very-poor">Poor</span></td><td>Barely growing</td></tr>
+          <tr><td>20% – 50%</td><td><span class="badge badge-poor">Below Avg</span></td><td>Modest growth</td></tr>
+          <tr><td>50% – 100%</td><td><span class="badge badge-good">Good</span></td><td>Decent multi-year performance</td></tr>
+          <tr><td>100% – 200%</td><td><span class="badge badge-very-good">Very Good</span></td><td>Strong multi-year growth</td></tr>
+          <tr><td>200% – 400%</td><td><span class="badge badge-excellent">Excellent</span></td><td>Top-tier strategy</td></tr>
+          <tr><td>&gt; 400%</td><td><span class="badge badge-suspicious">Suspicious</span></td><td>Validate carefully for overfitting</td></tr>
+        </tbody>
+      </table>
+      <div class="notes"><b>Notes:</b> Always read alongside the time period — 100% in 10 years ≠ 100% in 1 year. Pair with CAGR for a per-year equivalent.</div>
+    </div>
+  </div>
+
+  <!-- =========================================================== -->
+  <!-- METRIC 03 — SHARPE RATIO                                    -->
+  <!-- =========================================================== -->
+  <div class="section-title" id="metric-03">03. Sharpe Ratio</div>
+  <div class="metric-card">
+    <div class="metric-header"><div class="metric-num">03</div><div class="metric-title">Sharpe Ratio</div></div>
+    <div class="metric-body">
+      <p class="def">Risk-adjusted return: how much excess return you earn per unit of total volatility. Higher is better. Penalises both upside and downside volatility equally.</p>
+      <div class="formula-block">rf_daily  =  risk_free_annual ÷ N
+
+Sharpe  =  (mean(r_t) − rf_daily)  ÷  std(r_t, ddof=1)  ×  √N
+
+N  =  derived trading days per year</div>
+      <table class="rating-table">
+        <thead><tr><th>Range</th><th>Rating</th><th>Interpretation</th></tr></thead>
+        <tbody>
+          <tr><td>&lt; 0</td><td><span class="badge badge-very-poor">Very Poor</span></td><td>Losing money vs risk-free</td></tr>
+          <tr><td>0.0 – 0.5</td><td><span class="badge badge-very-poor">Poor</span></td><td>Not compensating for risk</td></tr>
+          <tr><td>0.5 – 1.0</td><td><span class="badge badge-average">Average</span></td><td>Marginal risk-reward</td></tr>
+          <tr><td>1.0 – 1.5</td><td><span class="badge badge-good">Good</span></td><td>Solid risk-adjusted performance</td></tr>
+          <tr><td>1.5 – 2.0</td><td><span class="badge badge-very-good">Very Good</span></td><td>Strong strategy</td></tr>
+          <tr><td>2.0 – 3.0</td><td><span class="badge badge-excellent">Excellent</span></td><td>Exceptional performance</td></tr>
+          <tr><td>&gt; 3.0</td><td><span class="badge badge-suspicious">Suspicious</span></td><td>May indicate overfitting</td></tr>
+        </tbody>
+      </table>
+      <div class="notes"><b>Notes:</b> Assumes normally distributed returns. Use Sortino alongside for strategies with asymmetric returns. Default risk-free rate in this system = 0% (configurable via <code>--risk-free-annual</code>).</div>
+    </div>
+  </div>
+
+  <!-- =========================================================== -->
+  <!-- METRIC 04 — SORTINO RATIO                                   -->
+  <!-- =========================================================== -->
+  <div class="section-title" id="metric-04">04. Sortino Ratio</div>
+  <div class="metric-card">
+    <div class="metric-header"><div class="metric-num">04</div><div class="metric-title">Sortino Ratio</div></div>
+    <div class="metric-body">
+      <p class="def">A refined Sharpe that penalises only downside (negative-day) volatility. More realistic for strategies with positive outliers.</p>
+      <div class="formula-block">Downside Deviation (DD)  =  √( mean( min(r_t, 0)² ) )
+  — zero/flat days are treated as losses in the denominator
+
+Sortino  =  (mean(r_t) − rf_daily)  ÷  DD  ×  √N</div>
+      <table class="rating-table">
+        <thead><tr><th>Range</th><th>Rating</th><th>Interpretation</th></tr></thead>
+        <tbody>
+          <tr><td>&lt; 0</td><td><span class="badge badge-very-poor">Very Poor</span></td><td>Strategy destroys capital on bad days</td></tr>
+          <tr><td>0.0 – 0.5</td><td><span class="badge badge-very-poor">Poor</span></td><td>High downside risk, low reward</td></tr>
+          <tr><td>0.5 – 1.0</td><td><span class="badge badge-average">Average</span></td><td>Moderate downside management</td></tr>
+          <tr><td>1.0 – 1.5</td><td><span class="badge badge-good">Good</span></td><td>Acceptable downside profile</td></tr>
+          <tr><td>1.5 – 2.5</td><td><span class="badge badge-very-good">Very Good</span></td><td>Strong downside protection</td></tr>
+          <tr><td>2.5 – 3.5</td><td><span class="badge badge-excellent">Excellent</span></td><td>Near-ideal risk management</td></tr>
+          <tr><td>&gt; 3.5</td><td><span class="badge badge-suspicious">Suspicious</span></td><td>Verify with more data</td></tr>
+        </tbody>
+      </table>
+      <div class="notes"><b>Notes:</b> Sortino is always ≥ Sharpe (smaller denominator). A Sortino of 2.0 with Sharpe 1.0 suggests good upside skew. Ideal for momentum/trend strategies.</div>
+    </div>
+  </div>
+
+  <!-- =========================================================== -->
+  <!-- METRIC 05 — CALMAR RATIO                                    -->
+  <!-- =========================================================== -->
+  <div class="section-title" id="metric-05">05. Calmar Ratio</div>
+  <div class="metric-card">
+    <div class="metric-header"><div class="metric-num">05</div><div class="metric-title">Calmar Ratio</div></div>
+    <div class="metric-body">
+      <p class="def">Annual return relative to the worst loss. Answers: "How much annual return am I getting for the worst pain I endured?"</p>
+      <div class="formula-block">Calmar  =  CAGR  ÷  |Max Drawdown|
+
+Computed on the largest contiguous segment (no data gaps &gt; max_gap_days).</div>
+      <table class="rating-table">
+        <thead><tr><th>Range</th><th>Rating</th><th>Interpretation</th></tr></thead>
+        <tbody>
+          <tr><td>&lt; 0.5</td><td><span class="badge badge-very-poor">Very Poor</span></td><td>Max drawdown far too large vs returns</td></tr>
+          <tr><td>0.5 – 1.0</td><td><span class="badge badge-very-poor">Poor</span></td><td>Drawdown not justified by returns</td></tr>
+          <tr><td>1.0 – 2.0</td><td><span class="badge badge-average">Average</span></td><td>Acceptable return-to-drawdown trade-off</td></tr>
+          <tr><td>2.0 – 3.0</td><td><span class="badge badge-good">Good</span></td><td>Strong with manageable pain</td></tr>
+          <tr><td>3.0 – 5.0</td><td><span class="badge badge-very-good">Very Good</span></td><td>Excellent risk-reward</td></tr>
+          <tr><td>&gt; 5.0</td><td><span class="badge badge-excellent">Excellent</span></td><td>World-class — verify for overfitting</td></tr>
+        </tbody>
+      </table>
+      <div class="notes"><b>Notes:</b> Very sensitive to backtest length. Shorter backtests may not have hit worst drawdown scenarios yet. Best used with ≥ 3 years of data.</div>
+    </div>
+  </div>
+
+  <!-- =========================================================== -->
+  <!-- METRIC 06 — ANNUAL VOLATILITY                               -->
+  <!-- =========================================================== -->
+  <div class="section-title" id="metric-06">06. Annual Volatility</div>
+  <div class="metric-card">
+    <div class="metric-header"><div class="metric-num">06</div><div class="metric-title">Annual Volatility</div></div>
+    <div class="metric-body">
+      <p class="def">How much the strategy's returns fluctuate, annualised from daily data. Higher volatility = more uncertainty and emotional stress.</p>
+      <div class="formula-block">Annual Volatility  =  std(r_t, ddof=1)  ×  √N
+
+N  =  derived trading days per year (≈ 252 for typical markets)</div>
+      <table class="rating-table">
+        <thead><tr><th>Range</th><th>Rating</th><th>Interpretation</th></tr></thead>
+        <tbody>
+          <tr><td>&lt; 5%</td><td><span class="badge badge-average">Very Low</span></td><td>Bond-like, possibly too conservative</td></tr>
+          <tr><td>5% – 10%</td><td><span class="badge badge-good">Low</span></td><td>Very stable — good for conservative traders</td></tr>
+          <tr><td>10% – 15%</td><td><span class="badge badge-very-good">Moderate</span></td><td>Typical for balanced equity</td></tr>
+          <tr><td>15% – 25%</td><td><span class="badge badge-average">High</span></td><td>Aggressive strategy, needs strong nerves</td></tr>
+          <tr><td>25% – 40%</td><td><span class="badge badge-poor">Very High</span></td><td>Stressful — ensure returns justify this</td></tr>
+          <tr><td>&gt; 40%</td><td><span class="badge badge-very-poor">Extreme</span></td><td>High risk of ruin; review position sizing</td></tr>
+        </tbody>
+      </table>
+      <div class="notes"><b>Notes:</b> Low volatility alone is NOT good — pair with returns (Sharpe). Nifty 50 volatility ≈ 14–18% in normal years. Intraday strategies typically show lower annualised vol.</div>
+    </div>
+  </div>
+
+  <!-- =========================================================== -->
+  <!-- METRIC 07 — MAX DRAWDOWN                                    -->
+  <!-- =========================================================== -->
+  <div class="section-title" id="metric-07">07. Max Drawdown</div>
+  <div class="metric-card">
+    <div class="metric-header"><div class="metric-num">07</div><div class="metric-title">Max Drawdown</div></div>
+    <div class="metric-body">
+      <p class="def">Largest peak-to-trough decline in the additive equity curve. Represents the worst loss a trader would have suffered entering at the peak and exiting at the trough.</p>
+      <div class="formula-block">Equity curve  =  cumsum(r_t)   (additive)
+Peak_t        =  max(equity_0 … equity_t)
+Drawdown_t    =  equity_t − Peak_t
+
+Max Drawdown  =  min(Drawdown_t)   ← most negative value</div>
+      <table class="rating-table">
+        <thead><tr><th>Range (lower magnitude = better)</th><th>Rating</th><th>Interpretation</th></tr></thead>
+        <tbody>
+          <tr><td>0% – 5%</td><td><span class="badge badge-excellent">Excellent</span></td><td>Near-perfect capital protection</td></tr>
+          <tr><td>5% – 10%</td><td><span class="badge badge-very-good">Very Good</span></td><td>Outstanding drawdown control</td></tr>
+          <tr><td>10% – 20%</td><td><span class="badge badge-good">Good</span></td><td>Acceptable for most equity strategies</td></tr>
+          <tr><td>20% – 30%</td><td><span class="badge badge-average">Average</span></td><td>Requires strong conviction to hold</td></tr>
+          <tr><td>30% – 50%</td><td><span class="badge badge-poor">Poor</span></td><td>Psychologically very difficult</td></tr>
+          <tr><td>&gt; 50%</td><td><span class="badge badge-very-poor">Very Poor</span></td><td>Half capital gone; unacceptable</td></tr>
+        </tbody>
+      </table>
+      <div class="notes"><b>Notes:</b> 50% drawdown requires a 100% gain just to break even. Max Drawdown tells you the worst loss — not how long it lasted (see Avg Drawdown Days). Most retail traders quit strategies during drawdowns.</div>
+    </div>
+  </div>
+
+  <!-- =========================================================== -->
+  <!-- METRIC 08 — AVG DRAWDOWN DAYS                               -->
+  <!-- =========================================================== -->
+  <div class="section-title" id="metric-08">08. Avg Drawdown Days</div>
+  <div class="metric-card">
+    <div class="metric-header"><div class="metric-num">08</div><div class="metric-title">Avg Drawdown Days</div></div>
+    <div class="metric-body">
+      <p class="def">Average number of trading days spent in a drawdown (equity below a prior peak). Measures recovery time and persistence of losses.</p>
+      <div class="formula-block">For each drawdown episode:
+  episode_start  =  first day equity falls below prior peak
+  episode_end    =  first day equity recovers to (or above) prior peak
+
+Avg Drawdown Days  =  mean(episode lengths in trading days)</div>
+      <table class="rating-table">
+        <thead><tr><th>Range</th><th>Rating</th><th>Interpretation</th></tr></thead>
+        <tbody>
+          <tr><td>&lt; 5 days</td><td><span class="badge badge-excellent">Excellent</span></td><td>Recovers almost immediately</td></tr>
+          <tr><td>5 – 15 days</td><td><span class="badge badge-very-good">Very Good</span></td><td>Short recoveries — low stress</td></tr>
+          <tr><td>15 – 30 days</td><td><span class="badge badge-good">Good</span></td><td>~1-month average recovery</td></tr>
+          <tr><td>30 – 60 days</td><td><span class="badge badge-average">Average</span></td><td>1–2 months underwater; needs patience</td></tr>
+          <tr><td>60 – 120 days</td><td><span class="badge badge-poor">Poor</span></td><td>Quarterly drawdowns; psychologically hard</td></tr>
+          <tr><td>&gt; 120 days</td><td><span class="badge badge-very-poor">Very Poor</span></td><td>Long underwater periods; strategy review needed</td></tr>
+        </tbody>
+      </table>
+      <div class="notes"><b>Notes:</b> Short avg drawdown days + low max drawdown = robust strategy. Long avg days even with low max drawdown suggests slow recovery. Critical for fund managers with periodic performance reviews.</div>
+    </div>
+  </div>
+
+  <!-- =========================================================== -->
+  <!-- METRIC 09 — KELLY CRITERION                                 -->
+  <!-- =========================================================== -->
+  <div class="section-title" id="metric-09">09. Kelly Criterion</div>
+  <div class="metric-card">
+    <div class="metric-header"><div class="metric-num">09</div><div class="metric-title">Kelly Criterion</div></div>
+    <div class="metric-body">
+      <p class="def">Optimal fraction of capital to risk per trade to maximise long-term growth while avoiding ruin. Balances aggression with safety.</p>
+      <div class="formula-block">W  =  win rate  =  count(r_t > 0) ÷ count(r_t ≠ 0)
+R  =  win/loss ratio  =  mean(r_t | r_t > 0)  ÷  |mean(r_t | r_t < 0)|
+
+Kelly %  =  W  −  (1 − W) ÷ R
+
+Negative Kelly → do NOT size up; this setup has negative expectancy.</div>
+      <table class="rating-table">
+        <thead><tr><th>Recommended Kelly % per trade</th><th>Rating</th><th>Interpretation</th></tr></thead>
+        <tbody>
+          <tr><td>&lt; 5%</td><td><span class="badge badge-average">Very Conservative</span></td><td>Too small; minimal compounding</td></tr>
+          <tr><td>5% – 10%</td><td><span class="badge badge-good">Conservative</span></td><td>Safe starting range for new strategies</td></tr>
+          <tr><td>10% – 20%</td><td><span class="badge badge-very-good">Moderate</span></td><td>Balanced risk-reward — recommended zone</td></tr>
+          <tr><td>20% – 30%</td><td><span class="badge badge-average">Aggressive</span></td><td>High risk — use Half-Kelly at most</td></tr>
+          <tr><td>30% – 50%</td><td><span class="badge badge-poor">Very Aggressive</span></td><td>Use ¼ Kelly only; dangerous at full</td></tr>
+          <tr><td>&gt; 50%</td><td><span class="badge badge-very-poor">Extreme</span></td><td>Full Kelly here = near-certain ruin</td></tr>
+        </tbody>
+      </table>
+      <div class="notes"><b>Practical rule:</b> Most professionals use <b>Half-Kelly</b> (Kelly ÷ 2) to reduce variance and protect against model estimation errors. Full Kelly leads to extreme equity curve volatility. Negative Kelly means avoid this trade setup entirely.</div>
+    </div>
+  </div>
+
+  <!-- =========================================================== -->
+  <!-- METRIC 10 — ROLLING SHARPE                                  -->
+  <!-- =========================================================== -->
+  <div class="section-title" id="metric-10">10. Rolling Sharpe</div>
+  <div class="metric-card">
+    <div class="metric-header"><div class="metric-num">10</div><div class="metric-title">Rolling Sharpe</div></div>
+    <div class="metric-body">
+      <p class="def">Sharpe Ratio calculated over a rolling window (default: 63 trading days ≈ 1 quarter) across the full period. Shows whether performance is consistent over time or only good during certain regimes.</p>
+      <div class="formula-block">At each day T (once window is filled):
+
+  window_returns  =  r_{T−W+1} … r_T   (W = rolling window, default 63 days)
+
+  Rolling Sharpe_T  =  (mean(window_returns) − rf_daily)
+                       ÷ std(window_returns, ddof=1)
+                       × √N</div>
+      <table class="rating-table">
+        <thead><tr><th>Pattern across time</th><th>Rating</th><th>Interpretation</th></tr></thead>
+        <tbody>
+          <tr><td>Always negative</td><td><span class="badge badge-very-poor">Very Poor</span></td><td>Strategy consistently destroys value</td></tr>
+          <tr><td>Mostly &lt; 0.5</td><td><span class="badge badge-poor">Poor</span></td><td>Unreliable; high variability</td></tr>
+          <tr><td>Mostly 0.5 – 1.0</td><td><span class="badge badge-average">Average</span></td><td>Some good periods, some bad</td></tr>
+          <tr><td>Mostly 1.0 – 1.5</td><td><span class="badge badge-good">Good</span></td><td>Relatively stable performance</td></tr>
+          <tr><td>Mostly &gt; 1.5</td><td><span class="badge badge-very-good">Very Good</span></td><td>Consistent outperformance</td></tr>
+          <tr><td>Stable &amp; &gt; 2.0</td><td><span class="badge badge-excellent">Excellent</span></td><td>Near-ideal consistency</td></tr>
+        </tbody>
+      </table>
+      <div class="notes">
+        <b>Consistency check:</b> High variance in Rolling Sharpe → strategy only works in certain market regimes. Low variance → robust across all conditions. Look for strategies where Rolling Sharpe rarely goes below 0.5. Extended dips to negative = strategy failure signal. Best viewed as a time-series chart, not a single number.
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================== -->
+  <!-- COMBINING METRICS                                           -->
+  <!-- =========================================================== -->
+  <div class="section-title" id="combining">Combining Metrics — Full Scorecard</div>
+  <p style="color:#8b949e;font-size:.87rem;margin-bottom:1rem">A single metric never tells the full story. Use these combinations for a complete picture.</p>
+  <div class="combo-grid">
+    <div class="combo-card">
+      <div class="combo-label">Return Quality</div>
+      <div class="combo-metrics">CAGR + Sharpe Ratio</div>
+      <div class="combo-desc">High CAGR + High Sharpe = consistent, risk-adjusted gains with minimal noise.</div>
+    </div>
+    <div class="combo-card">
+      <div class="combo-label">Downside Safety</div>
+      <div class="combo-metrics">Max Drawdown + Calmar + Avg Drawdown Days</div>
+      <div class="combo-desc">Low drawdown + High Calmar + Low recovery days = capital well protected.</div>
+    </div>
+    <div class="combo-card">
+      <div class="combo-label">Consistency Check</div>
+      <div class="combo-metrics">Rolling Sharpe + Annual Volatility</div>
+      <div class="combo-desc">Stable Rolling Sharpe + Low Vol = strategy works across market regimes.</div>
+    </div>
+    <div class="combo-card">
+      <div class="combo-label">Downside Asymmetry</div>
+      <div class="combo-metrics">Sharpe + Sortino</div>
+      <div class="combo-desc">If Sortino >> Sharpe, the strategy has positive return skew — a good sign.</div>
+    </div>
+    <div class="combo-card">
+      <div class="combo-label">Position Sizing</div>
+      <div class="combo-metrics">Kelly Criterion</div>
+      <div class="combo-desc">Tells you HOW MUCH to bet per trade. Always combine with all other metrics before live deployment.</div>
+    </div>
+    <div class="combo-card">
+      <div class="combo-label">Full Scorecard</div>
+      <div class="combo-metrics">All 10 metrics together</div>
+      <div class="combo-desc">No strategy should be deployed live on just 1–2 metrics alone. Evaluate all 10.</div>
+    </div>
+  </div>
+
+</div><!-- /wrap -->
+
+<footer>
+  <p>Quant Metrics Reference Guide &nbsp;·&nbsp; Generated by report_generator.py &nbsp;·&nbsp; MegaServe Data Team</p>
+</footer>
+
+<a href="#" id="btt">↑ Top</a>
+
+<script>
+  const btt = document.getElementById('btt');
+  window.addEventListener('scroll', () => {
+    btt.classList.toggle('visible', window.scrollY > 300);
+  });
+  btt.addEventListener('click', e => { e.preventDefault(); window.scrollTo({top:0,behavior:'smooth'}); });
+</script>
+</body>
+</html>
