@@ -24,9 +24,12 @@ Return formula:
         Base Capital    = 10,000,000  (fixed, 1 crore)
         Absolute PNL    = daily_return × Base Capital
 
-Broker whitelist (applied to ALL algos before any aggregation):
-    Only rows with broker in {GyandeepStocks, Kredent, MastertrustPro, SISL, VT_Capital}
-    are retained.  All other brokers are excluded.
+Data filters applied before any aggregation:
+    1. Algo-19 broker exclusion: rows where algo == "19" AND broker is
+       MasterTrust_Noren or mastertrust_dealer are dropped.
+    2. 0DTE filter: for algos 1, 7, 15 only rows where dte == "0DTE"
+       (case-insensitive) are retained; all other DTE rows are excluded.
+    3. Date exclusion: all rows for 18 Apr 2024 are dropped entirely.
 
 Usage:
     python report_generator.py --input /path/to/data.csv --algos 1,7,19
@@ -43,7 +46,7 @@ import logging
 import math
 import os
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field  # field kept for MetricBundle defaults
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -77,14 +80,21 @@ DATA_COLS = ["user_id", "alias", "mtm_all", "allocation", "server",
 # Minimum columns that must exist in the raw file
 REQUIRED_COLS = ["user_id", "mtm_all", "allocation", "date", "broker", "algo"]
 
-# Broker whitelist – only rows matching these brokers (case-insensitive) are kept
-ALLOWED_BROKERS_DEFAULT: frozenset[str] = frozenset({
-    "gyandeepstocks",
-    "kredent",
-    "mastertrustpro",
-    "sisl",
-    "vt_capital",
+# Algo-19 specific broker exclusions (case-insensitive)
+# Rows where algo == "19" AND broker matches any of these are dropped.
+ALGO19_EXCLUDED_BROKERS: frozenset[str] = frozenset({
+    "mastertrust_noren",
+    "mastertrust_dealer",
 })
+
+# Algos for which ONLY 0DTE rows are retained (matched against the "dte" column)
+ZERO_DTE_ALGOS: frozenset[str] = frozenset({"1", "7", "15"})
+
+# DTE value kept for zero-DTE algos (lowercased for comparison)
+ZERO_DTE_VALUE: str = "0dte"
+
+# Dates to completely exclude from ALL calculations (format: YYYY-MM-DD)
+EXCLUDED_DATES: list = ["2024-04-18"]
 
 # Base capital (fixed, 1 crore) used for Absolute PNL calculation
 BASE_CAPITAL_DEFAULT: int = 10_000_000
@@ -98,16 +108,13 @@ class Config:
     input_path: Path
     output_dir: Path
     rolling_window: int = 63                    # trading days (~1 quarter)
-    risk_free_annual: float = 0.0
+    risk_free_annual: float = 0.065          # 3-yr avg 91-day T-Bill yield (2022–2025)
     max_gap_days: int = 3                       # gap tolerance before counting a break
     allocation_scale: int = 100                 # processed_allocation = raw × scale
     algos_raw: Optional[str] = None             # None → prompt
     date_format: Optional[str] = None
     report_name: str = "Algo_performance_std"   # base name for output HTML files
     base_capital: int = BASE_CAPITAL_DEFAULT    # fixed capital for Absolute PNL
-
-    # Broker whitelist – lowercased; only rows matching these are kept (all algos)
-    allowed_brokers: frozenset = field(default_factory=lambda: ALLOWED_BROKERS_DEFAULT)
 
     @property
     def processed_excel_path(self) -> Path:
@@ -131,8 +138,10 @@ class Config:
 class LoadResult:
     df: pd.DataFrame          # processed rows (allocation already scaled)
     rows_in: int
-    rows_dropped_broker: int
-    rows_dropped_date: int
+    rows_dropped_excluded_date: int   # dropped because date is in EXCLUDED_DATES
+    rows_dropped_algo19_broker: int   # dropped: algo-19 mastertrust_noren/dealer rows
+    rows_dropped_dte: int             # dropped: non-0DTE rows for algos 1, 7, 15
+    rows_dropped_date: int            # dropped: unparseable date
     rows_dropped_mtm: int
     rows_dropped_alloc: int
     rows_dropped_dupe: int
@@ -150,8 +159,16 @@ def _read_raw(path: Path) -> pd.DataFrame:
 
 def load_data(cfg: Config) -> LoadResult:
     """
-    Load raw file, validate columns, coerce types, apply broker exclusions,
+    Load raw file, validate columns, coerce types, apply business filters,
     scale allocation, filter to required columns only.
+
+    Filters applied (in order):
+      1. Date exclusion  : all rows for dates in EXCLUDED_DATES are dropped entirely.
+      2. Algo-19 broker  : rows where algo == "19" AND broker is mastertrust_noren or
+                           mastertrust_dealer are dropped.
+      3. 0DTE filter     : for algos 1, 7, 15 only rows where dte == "0DTE"
+                           (case-insensitive) are retained.
+      4. Standard hygiene: bad dates, null mtm, null/<=0 allocation, duplicates.
 
     Returns processed rows ready for aggregation.
     """
@@ -168,35 +185,39 @@ def load_data(cfg: Config) -> LoadResult:
 
     df = raw.copy()
 
-    # --- broker whitelist BEFORE any numeric coercion ---
-    broker_str = df["broker"].astype(str).str.strip().str.lower()
-    mask_allowed = broker_str.isin(cfg.allowed_brokers)
-    rows_dropped_broker = int((~mask_allowed).sum())
-    if rows_dropped_broker:
-        dropped_names = (
-            df.loc[~mask_allowed, "broker"].astype(str).str.strip()
-            .value_counts().head(10).to_dict()
-        )
-        logger.info(
-            "Broker whitelist: dropping %d rows not in allowed set. "
-            "Top excluded brokers: %s",
-            rows_dropped_broker, dropped_names,
-        )
-    df = df[mask_allowed].copy()
-
-    # --- date coercion ---
+    # --- date coercion (needed early for date-exclusion filter) ---
     if cfg.date_format:
         df["date"] = pd.to_datetime(
             df["date"], format=cfg.date_format, errors="coerce"
         ).dt.normalize()
     else:
-        df["date"] = pd.to_datetime(
-            df["date"], errors="coerce", dayfirst=True
-        ).dt.normalize()
+        # Try YYYY-MM-DD first (ISO format — matches this dataset).
+        # Fall back to dayfirst (DD-MM-YYYY) only for values that fail ISO parse.
+        parsed_iso = pd.to_datetime(df["date"], format="%Y-%m-%d", errors="coerce")
+        needs_fallback = parsed_iso.isna() & df["date"].notna()
+        if needs_fallback.any():
+            parsed_fallback = pd.to_datetime(
+                df.loc[needs_fallback, "date"], errors="coerce", dayfirst=True
+            )
+            parsed_iso = parsed_iso.copy()
+            parsed_iso[needs_fallback] = parsed_fallback
+        df["date"] = parsed_iso.dt.normalize()
 
     bad_date = df["date"].isna()
     rows_dropped_date = int(bad_date.sum())
     df = df[~bad_date]
+
+    # --- FILTER 1: drop entirely excluded dates ---
+    excluded_ts = [pd.Timestamp(d) for d in EXCLUDED_DATES]
+    mask_excl_date = df["date"].isin(excluded_ts)
+    rows_dropped_excluded_date = int(mask_excl_date.sum())
+    if rows_dropped_excluded_date:
+        excl_dates_found = df.loc[mask_excl_date, "date"].dt.strftime("%d %b %Y").unique().tolist()
+        logger.info(
+            "Date exclusion: dropping ALL %d rows for excluded date(s): %s",
+            rows_dropped_excluded_date, excl_dates_found,
+        )
+    df = df[~mask_excl_date].copy()
 
     # --- numeric coercion ---
     df["mtm_all"] = pd.to_numeric(df["mtm_all"], errors="coerce")
@@ -214,14 +235,46 @@ def load_data(cfg: Config) -> LoadResult:
     df["algo"] = df["algo"].astype(str).str.strip()
     df["user_id"] = df["user_id"].astype(str).str.strip()
 
+    # --- FILTER 2: algo-19 broker exclusion ---
+    broker_str = df["broker"].astype(str).str.strip().str.lower()
+    mask_algo19 = (df["algo"] == "19") & broker_str.isin(ALGO19_EXCLUDED_BROKERS)
+    rows_dropped_algo19_broker = int(mask_algo19.sum())
+    if rows_dropped_algo19_broker:
+        dropped_brokers = (
+            df.loc[mask_algo19, "broker"].astype(str).str.strip()
+            .value_counts().to_dict()
+        )
+        logger.info(
+            "Algo-19 broker exclusion: dropping %d rows (brokers: %s)",
+            rows_dropped_algo19_broker, dropped_brokers,
+        )
+    df = df[~mask_algo19].copy()
+
+    # --- FILTER 3: 0DTE filter for algos 1, 7, 15 ---
+    # For these algos, only rows where dte == "0DTE" (case-insensitive) are kept.
+    dte_str = df["dte"].astype(str).str.strip().str.lower() if "dte" in df.columns else pd.Series("", index=df.index)
+    mask_dte_algos = df["algo"].isin(ZERO_DTE_ALGOS)
+    mask_non_zero_dte = mask_dte_algos & (dte_str != ZERO_DTE_VALUE)
+    rows_dropped_dte = int(mask_non_zero_dte.sum())
+    if rows_dropped_dte:
+        logger.info(
+            "0DTE filter: dropping %d non-0DTE rows for algos %s",
+            rows_dropped_dte, sorted(ZERO_DTE_ALGOS, key=algo_sort_key),
+        )
+    df = df[~mask_non_zero_dte].copy()
+
     # --- de-duplicate on (user_id, algo, date) ---
     before = len(df)
     df = df.sort_values(["user_id", "algo", "date"])
     df = df.drop_duplicates(subset=["user_id", "algo", "date"], keep="first")
     rows_dropped_dupe = before - len(df)
 
-    if rows_dropped_broker:
-        logger.warning("Dropped %d rows excluded by broker whitelist", rows_dropped_broker)
+    if rows_dropped_excluded_date:
+        logger.warning("Dropped %d rows for excluded date(s)", rows_dropped_excluded_date)
+    if rows_dropped_algo19_broker:
+        logger.warning("Dropped %d algo-19 rows excluded by broker filter", rows_dropped_algo19_broker)
+    if rows_dropped_dte:
+        logger.warning("Dropped %d non-0DTE rows for algos %s", rows_dropped_dte, sorted(ZERO_DTE_ALGOS))
     if rows_dropped_date:
         logger.warning("Dropped %d rows with unparseable date", rows_dropped_date)
     if rows_dropped_mtm:
@@ -250,7 +303,9 @@ def load_data(cfg: Config) -> LoadResult:
     return LoadResult(
         df=df,
         rows_in=rows_in,
-        rows_dropped_broker=rows_dropped_broker,
+        rows_dropped_excluded_date=rows_dropped_excluded_date,
+        rows_dropped_algo19_broker=rows_dropped_algo19_broker,
+        rows_dropped_dte=rows_dropped_dte,
         rows_dropped_date=rows_dropped_date,
         rows_dropped_mtm=rows_dropped_mtm,
         rows_dropped_alloc=rows_dropped_alloc,
@@ -355,8 +410,19 @@ def m_cumulative_return(r: pd.Series) -> float:
     return float(r.sum()) if len(r) else float("nan")
 
 
-def m_cagr_simple(r: pd.Series, n_per_year: float) -> float:
-    return float(r.mean() * n_per_year) if len(r) else float("nan")
+def m_cagr(r: pd.Series, n_per_year: float) -> float:
+    """
+    Geometric CAGR: (1 + cumulative_return)^(N / actual_days) - 1
+    Correctly accounts for compounding — consistent with the user's manual check:
+        total_pnl / base_capital = cumulative return → annualised geometrically.
+    """
+    if len(r) == 0 or n_per_year <= 0:
+        return float("nan")
+    cum = float(r.sum())
+    years = len(r) / n_per_year
+    if years <= 0 or (1 + cum) <= 0:
+        return float("nan")
+    return float((1 + cum) ** (1 / years) - 1)
 
 
 def m_annual_volatility(r: pd.Series, n_per_year: float) -> float:
@@ -449,15 +515,19 @@ def m_kelly_discrete(r: pd.Series) -> float:
     return float(w - (1 - w) / (avg_win / avg_loss))
 
 
-def m_rolling_sharpe(r: pd.Series, window: int, n_per_year: float) -> pd.Series:
+def m_rolling_sharpe(
+    r: pd.Series, window: int, n_per_year: float, rf_annual: float = 0.0
+) -> pd.Series:
     if len(r) < window:
         return pd.Series(dtype=float)
+
+    rf_daily = rf_annual / n_per_year if n_per_year > 0 else 0.0
 
     def _sharpe(x: np.ndarray) -> float:
         sd = np.std(x, ddof=1)
         if sd == 0:
             return np.nan
-        return float(np.mean(x) / sd * math.sqrt(n_per_year))
+        return float((np.mean(x) - rf_daily) / sd * math.sqrt(n_per_year))
 
     return r.rolling(window).apply(_sharpe, raw=True)
 
@@ -519,7 +589,7 @@ def compute_metrics(
 
     # distributional (all data)
     b.cumulative_return = m_cumulative_return(series)
-    b.cagr = m_cagr_simple(series, n_per_year)
+    b.cagr = m_cagr(series, n_per_year)
     b.annual_vol = m_annual_volatility(series, n_per_year)
     b.sharpe = m_sharpe(series, n_per_year, cfg.risk_free_annual)
     b.sortino = m_sortino(series, n_per_year, cfg.risk_free_annual)
@@ -534,7 +604,7 @@ def compute_metrics(
     b.max_consec_losses = m_max_consecutive(seg, wins=False)
 
     # rolling sharpe
-    rs = m_rolling_sharpe(series, cfg.rolling_window, n_per_year).dropna()
+    rs = m_rolling_sharpe(series, cfg.rolling_window, n_per_year, cfg.risk_free_annual).dropna()
     if not rs.empty:
         b.rolling_sharpe_last = float(rs.iloc[-1])
         b.rolling_sharpe_series = [float(v) for v in rs.values]
@@ -788,6 +858,16 @@ th.sortable.asc .arr,th.sortable.desc .arr{opacity:1}
   border:1px solid var(--line);background:var(--surface);box-shadow:var(--shadow);
   cursor:pointer;display:none;align-items:center;justify-content:center;color:var(--ink-2);z-index:30}
 .toTop.show{display:flex}
+.warn-badge{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;
+  padding:3px 9px;border-radius:999px;background:#fff7ed;color:#9a5b14;border:1px solid #f4d9b0;
+  white-space:nowrap;cursor:default}
+.method-note{background:#fffbf0;border:1px solid #f4d9b0;border-radius:12px;
+  padding:14px 18px;margin-bottom:22px;font-size:12.5px}
+.method-note h3{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:#9a5b14;font-weight:700;margin:0 0 10px}
+.method-note ul{margin:0;padding-left:18px}
+.method-note li{margin:4px 0;color:var(--ink-2);line-height:1.55}
+.method-note b{color:var(--ink)}
 footer{margin-top:40px;border-top:1px solid var(--line);padding-top:16px;
   font-size:12px;color:var(--ink-2)}
 footer h3{font-size:11px;text-transform:uppercase;letter-spacing:.08em;margin:0 0 8px;color:var(--ink-3)}
@@ -805,7 +885,8 @@ JS = r"""
 (function(){
   var ROOT=document.getElementById('reportData'); if(!ROOT) return;
   var DATA=JSON.parse(ROOT.textContent);
-  var P=DATA.params, N=P.nPerYear, WIN=P.rollingWindow, MAXGAP=P.maxGapDays;
+  var P=DATA.params, WIN=P.rollingWindow, MAXGAP=P.maxGapDays;
+  var RF=P.rfAnnual||0;
   var CAL={}; DATA.calendar.forEach(function(d,i){ CAL[d]=i; });
   function toMs(iso){ return Date.parse(iso); }
   var DMIN=toMs(DATA.dateMin), DMAX=toMs(DATA.dateMax);
@@ -820,7 +901,11 @@ JS = r"""
     out.push(pts.slice(start)); return out; }
   function largest(ss){ if(!ss.length) return []; var b=ss[0]; for(var i=1;i<ss.length;i++) if(ss[i].length>b.length) b=ss[i]; return b; }
 
-  function metrics(pts){
+  /* N = per-algo annualisation factor passed from server; rf = annual risk-free rate */
+  function metrics(pts, N, rf){
+    if(N==null||isNaN(N)||N<=0) N=P.nPerYear;
+    if(rf==null||isNaN(rf)) rf=RF;
+    var rfDaily=rf/N;
     var m={n:pts.length,from:null,to:null,segs:1,breaks:false,equity:[],rolling:[],
            cagr:NaN,cumret:NaN,sharpe:NaN,sortino:NaN,calmar:NaN,vol:NaN,
            maxdd:NaN,avgddays:0,maxwins:0,maxlosses:0,kelly:NaN,rolllast:NaN};
@@ -829,11 +914,12 @@ JS = r"""
     var r=pts.map(function(p){return p[1];});
     var mu=mean(r), sd=sstd(r);
     m.cumret=r.reduce(function(a,b){return a+b;},0);
-    m.cagr=mu*N;
+    var years=pts.length/N;
+    m.cagr=(years>0&&(1+m.cumret)>0)?Math.pow(1+m.cumret,1/years)-1:NaN;
     m.vol=(pts.length<2)?NaN:sd*Math.sqrt(N);
-    m.sharpe=(pts.length<2||!(sd>0))?NaN:mu/sd*Math.sqrt(N);
+    m.sharpe=(pts.length<2||!(sd>0))?NaN:(mu-rfDaily)/sd*Math.sqrt(N);
     var dn=0; for(var i=0;i<r.length;i++){ if(r[i]<0) dn+=r[i]*r[i]; } dn=Math.sqrt(dn/r.length);
-    m.sortino=(pts.length<2||!(dn>0))?NaN:mu/dn*Math.sqrt(N);
+    m.sortino=(pts.length<2||!(dn>0))?NaN:(mu-rfDaily)/dn*Math.sqrt(N);
     var cum=0; for(var i=0;i<pts.length;i++){ cum+=pts[i][1]; m.equity.push([toMs(pts[i][0]),cum*100]); }
     var ss=segs(pts); m.segs=ss.length; m.breaks=ss.length>1;
     var seg=largest(ss), sr=seg.map(function(p){return p[1];});
@@ -852,7 +938,7 @@ JS = r"""
     m.kelly=(al===0||aw===0)?NaN:(wins.length/r.length)-(1-wins.length/r.length)/(aw/al);
     if(r.length>=WIN){
       var rs=[];
-      for(var i=WIN-1;i<r.length;i++){ var win=r.slice(i-WIN+1,i+1); var s=sstd(win); var v=(s>0)?mean(win)/s*Math.sqrt(N):NaN;
+      for(var i=WIN-1;i<r.length;i++){ var win=r.slice(i-WIN+1,i+1); var s=sstd(win); var v=(s>0)?(mean(win)-rfDaily)/s*Math.sqrt(N):NaN;
         if(!isNaN(v)){rs.push(v); m.rolling.push([toMs(pts[i][0]),v]);} }
       if(rs.length) m.rolllast=rs[rs.length-1];
     }
@@ -953,16 +1039,15 @@ JS = r"""
 
     DATA.algos.forEach(function(a){
       var pts=filt(a.portfolio,from,to);
-      var m=metrics(pts); KEYS.forEach(function(k){setCell(a.id,k,m);});
+      var m=metrics(pts, a.nPerYear, RF); KEYS.forEach(function(k){setCell(a.id,k,m);});
       var dmin=Infinity,dmax=-Infinity;
       if(m.equity.length){dmin=m.equity[0][0];dmax=m.equity[m.equity.length-1][0];}
       var hasData=dmin!==Infinity; if(!hasData){dmin=from;dmax=to;}
       var dcell=document.querySelector("[data-algo='"+CSS.escape(a.id)+"'][data-metric='days']");
       if(dcell){dcell.textContent=m.n;dcell.setAttribute('data-v',m.n);}
       var cov=document.querySelector(".cov[data-algo='"+CSS.escape(a.id)+"']");
-      if(cov){cov.textContent=hasData?(m.n+'d · '+fdate(dmin)+' – '+fdate(dmax)):'no data in range';}
-      var fl=document.querySelector(".algoflag[data-algo='"+CSS.escape(a.id)+"']");
-      if(fl){fl.className='flag algoflag'+(m.breaks?'':' ok');fl.setAttribute('data-algo',a.id);fl.textContent=m.breaks?('breaks: '+m.segs+' seg'):'continuous';}
+      if(cov){cov.textContent=hasData?(m.n.toLocaleString()+' sessions · '+fdate(dmin)+' – '+fdate(dmax)):'no data in range';}
+      /* breaks badge removed — no segment-break indicator shown */
       var eq=CH[a.id+'|equity'];if(eq){eq.setDomain(dmin,dmax);eq.render([{name:'Portfolio',color:'#2563eb',points:m.equity}]);}
       var ro=CH[a.id+'|rolling'];if(ro){ro.setDomain(dmin,dmax);ro.render([{name:'Rolling Sharpe',color:'#0d9488',points:m.rolling}]);}
     });
@@ -1062,11 +1147,12 @@ def _doc(title: str, body: str, data_json: Optional[str] = None, js: str = "") -
 
 
 def _appbar(title: str, lede: str) -> str:
+    lede_html = f"<div class='wrap'><p class='lede'>{lede}</p></div>" if lede else ""
     return (
         "<header class='appbar'><div class='wrap'><div>"
         "<div class='eyebrow'>Performance Report</div>"
         f"<h1>{html.escape(title)}</h1></div></div></header>"
-        f"<div class='wrap'><p class='lede'>{lede}</p></div>"
+        + lede_html
     )
 
 
@@ -1165,9 +1251,10 @@ def _footer(load: LoadResult, cfg: Config, n_per_year: float) -> str:
         "The equity curve is the running cumulative sum of daily returns.</li>"
 
         # --- CAGR ---
-        f"<li><b>CAGR</b> = mean(r<sub>t</sub>) &times; N &nbsp;|&nbsp; "
-        f"N = {n_per_year:.1f} trading days/yr, derived as: distinct trading dates &divide; calendar years spanned. "
-        "This is a simple linear annualisation of the mean daily return (not geometric compounding).</li>"
+        "<li><b>CAGR</b> = (1 + &Sigma;r<sub>t</sub>)<sup>N/days</sup> &minus; 1 &nbsp;|&nbsp; "
+        "Geometric compound annualisation of the cumulative return. "
+        "N = per-algo trading days/yr (distinct dates &divide; calendar years for that algo). "
+        "Consistent with: total_pnl &divide; base_capital = cumulative return, annualised geometrically.</li>"
 
         # --- volatility ---
         f"<li><b>Annual Volatility</b> = std(r<sub>t</sub>, ddof=1) &times; &radic;N &nbsp;|&nbsp; "
@@ -1175,7 +1262,7 @@ def _footer(load: LoadResult, cfg: Config, n_per_year: float) -> str:
 
         # --- sharpe ---
         f"<li><b>Sharpe Ratio</b> = (mean(r<sub>t</sub>) &minus; r<sub>f</sub>/N) / std(r<sub>t</sub>) &times; &radic;N "
-        f"&nbsp;|&nbsp; r<sub>f</sub> = {rf_pct:.1f}% p.a. (risk-free rate). "
+        f"&nbsp;|&nbsp; r<sub>f</sub> = {rf_pct:.1f}% p.a. (3-yr avg 91-day Indian T-Bill, 2022&ndash;2025). "
         "Penalises both upside and downside volatility equally.</li>"
 
         # --- sortino ---
@@ -1203,18 +1290,25 @@ def _footer(load: LoadResult, cfg: Config, n_per_year: float) -> str:
         "Negative Kelly means do not size up on this setup.</li>"
 
         # --- rolling sharpe ---
-        f"<li><b>Rolling Sharpe ({cfg.rolling_window}d)</b>: Sharpe formula applied over a "
-        f"rolling {cfg.rolling_window}-trading-day window across the full series. "
-        "The line starts once the first window fills. Stable values &gt; 1 indicate consistent performance.</li>"
+        f"<li><b>Rolling Sharpe ({cfg.rolling_window}d window &asymp; 1 quarter):</b> "
+        f"Sharpe formula (with r<sub>f</sub>) applied over a rolling {cfg.rolling_window}-trading-day window. "
+        f"63 days &asymp; one calendar quarter — long enough to smooth daily noise and capture a full "
+        "earnings/expiry cycle, short enough to flag a regime change within the same year. "
+        f"The line begins after the first {cfg.rolling_window} days (warm-up). "
+        "Stable values &gt; 1 indicate consistent risk-adjusted performance.</li>"
 
         # --- data quality ---
         "<li><b>Consecutive Wins/Losses</b>: longest streak of days with r &gt; 0 (wins) or "
         "r &le; 0 (losses) on the largest contiguous segment.</li>"
 
-        "<li><b>Broker whitelist:</b> only rows with broker in "
-        "{GyandeepStocks, Kredent, MastertrustPro, SISL, VT_Capital} "
-        "(case-insensitive) are retained across ALL algos before any scaling, "
-        "aggregation, or return calculation. All other brokers are excluded.</li>"
+        "<li><b>Algo-19 broker exclusion:</b> rows where algo&nbsp;=&nbsp;19 AND broker is "
+        "MasterTrust_Noren or mastertrust_dealer (case-insensitive) are dropped before "
+        "any scaling, aggregation, or return calculation. No global broker filter is applied.</li>"
+
+        "<li><b>0DTE filter:</b> for algos 1, 7, and 15 only rows where the "
+        "<code>dte</code> column equals &ldquo;0DTE&rdquo; (case-insensitive) are used "
+        "in calculations. All other DTE rows for those three algos are excluded. "
+        "No DTE filter is applied to any other algo.</li>"
 
         f"<li><b>Processed data columns (Excel):</b> "
         "PNL% = (sum_mtm / sum_allocation) &times; 100 &nbsp;|&nbsp; "
@@ -1223,13 +1317,48 @@ def _footer(load: LoadResult, cfg: Config, n_per_year: float) -> str:
         "These columns show what you would have earned/lost on a 1-crore base capital.</li>"
 
         f"<li><b>Data quality:</b> rows in = {load.rows_in:,} | "
-        f"broker-excluded (not in whitelist) = {load.rows_dropped_broker:,} | "
+        f"algo-19 broker excluded = {load.rows_dropped_algo19_broker:,} | "
+        f"non-0DTE rows dropped (algos 1/7/15) = {load.rows_dropped_dte:,} | "
         f"unparseable date = {load.rows_dropped_date} | "
         f"null mtm = {load.rows_dropped_mtm} | "
         f"null/&le;0 allocation = {load.rows_dropped_alloc} | "
         f"duplicate (user, algo, date) = {load.rows_dropped_dupe}.</li>"
 
         "</ul></footer></div>"
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Methodology / warning helpers
+# --------------------------------------------------------------------------- #
+def _data_years(b: MetricBundle) -> float:
+    """Calendar years spanned by this algo's history."""
+    if b.date_start is None or b.date_end is None or b.n_days == 0:
+        return 0.0
+    return (b.date_end - b.date_start).days / 365.25
+
+
+def _methodology_note(cfg: Config) -> str:
+    rf_pct = cfg.risk_free_annual * 100
+    return (
+        "<div class='method-note'>"
+        "<h3>ℹ Methodology assumptions</h3>"
+        "<ul>"
+        f"<li><b>Risk-free rate:</b> {rf_pct:.1f}% p.a. — 3-year average of Indian 91-day"
+        " T-Bill (2022&ndash;2025). Applied daily as r<sub>f&nbsp;daily</sub>"
+        f" = {rf_pct:.1f}% &divide; N when computing Sharpe, Sortino, and Rolling Sharpe.</li>"
+        f"<li><b>Rolling Sharpe window &mdash; {cfg.rolling_window} trading days"
+        " (&asymp;&thinsp;1 calendar quarter):</b> One quarter is the shortest window that"
+        " captures a full earnings/expiry cycle. It smooths day-to-day noise while still"
+        " being short enough to flag a strategy regime change within the same year."
+        " The Rolling Sharpe line is absent for the first"
+        f" {cfg.rolling_window} trading days of each algo (warm-up period).</li>"
+        "<li><b>Short-history caveat:</b> CAGR and Calmar are unreliable for algos with"
+        " &lt;&nbsp;1 year of data &mdash; the quant reference guide recommends"
+        " &ge;&nbsp;3 years for Calmar. Algos flagged"
+        " <span class='warn-badge'>&#9888; &lt;1&nbsp;yr</span>"
+        " should be interpreted with this caveat in mind.</li>"
+        "</ul></div>"
     )
 
 
@@ -1278,9 +1407,17 @@ def render_report(
     sum_rows = []
     for a in algos:
         b = per_algo[a]
+        data_yrs_sum = _data_years(b)
+        short_sum = data_yrs_sum < 1.0 and b.n_days > 0
+        warn_cell = (
+            f" <span class='warn-badge' "
+            f"title='Only {data_yrs_sum:.1f} yr of data — CAGR &amp; Calmar unreliable'>"
+            f"&#9888; &lt;1&nbsp;yr</span>"
+        ) if short_sum else ""
         sum_rows.append(
             f"<tr data-algo-row='{html.escape(str(a))}'>"
-            f"<td class='metric' data-v='{html.escape(str(a))}'>{html.escape(str(a))}</td>"
+            f"<td class='metric' data-v='{html.escape(str(a))}'>"
+            f"{html.escape(str(a))}{warn_cell}</td>"
             + _cell(a, "cagr",   "cagr",          fmt_pct,   b)
             + _cell(a, "sharpe", "sharpe",         fmt_ratio, b)
             + _cell(a, "sortino","sortino",         fmt_ratio, b)
@@ -1288,7 +1425,7 @@ def render_report(
             + _cell(a, "calmar", "calmar",          fmt_ratio, b)
             + _cell(a, "cumret", "cumulative_return", fmt_pct, b)
             + f"<td class='num' data-algo='{html.escape(str(a))}' "
-              f"data-metric='days' data-v='{b.n_days}'>{b.n_days}</td>"
+              f"data-metric='days' data-v='{b.n_days}'>{b.n_days:,}</td>"
             + "</tr>"
         )
 
@@ -1299,7 +1436,7 @@ def render_report(
         "<div class='panel'><div class='tbl-wrap'><table><thead><tr>"
         "<th class='sortable'>Algo <span class='arr'>&#9650;&#9660;</span></th>"
         + sh("CAGR") + sh("Sharpe") + sh("Sortino")
-        + sh("Max DD") + sh("Calmar") + sh("Cum. Return") + sh("Days")
+        + sh("Max DD") + sh("Calmar") + sh("Cum. Return") + sh("Sessions")
         + f"</tr></thead><tbody>{''.join(sum_rows)}</tbody></table></div></div></section>"
     )
 
@@ -1308,10 +1445,15 @@ def render_report(
     cards = []
     for a in algos:
         b = per_algo[a]
-        brk = b.has_breaks
-        flag_cls = "flag algoflag" + ("" if brk else " ok")
-        flag_txt = (f"breaks: {b.n_segments} seg" if brk else "continuous")
-        cov_txt = (f"{b.n_days}d &middot; {fmt_date(b.date_start)} "
+        data_yrs_card = _data_years(b)
+        short_card = data_yrs_card < 1.0 and b.n_days > 0
+        warn_tag = (
+            f"<span class='warn-badge' "
+            f"title='Only {data_yrs_card:.1f} yr of history — CAGR &amp; Calmar unreliable; "
+            f"quant guide recommends &ge; 3 yr for Calmar'>"
+            f"&#9888; &lt;1&nbsp;yr data</span>"
+        ) if short_card else ""
+        cov_txt = (f"{b.n_days:,} sessions &middot; {fmt_date(b.date_start)} "
                    f"&ndash; {fmt_date(b.date_end)}" if b.date_start else "no coverage")
 
         rows = "".join(
@@ -1335,7 +1477,7 @@ def render_report(
             f"<div class='card' data-algo-row='{html.escape(str(a))}'>"
             f"<div class='card-head'>{ICON_CHEV}"
             f"<span class='title'>Algo {html.escape(str(a))}</span>"
-            f"<span class='{flag_cls} algoflag' data-algo='{html.escape(str(a))}'>{flag_txt}</span>"
+            f"{warn_tag}"
             f"<span class='cov' data-algo='{html.escape(str(a))}'>{cov_txt}</span></div>"
             "<div class='card-body'><div class='card-grid'>"
             "<div class='chart-box'>"
@@ -1352,23 +1494,27 @@ def render_report(
             "</div></div></div>"
         )
 
-    lede = ("Per-algo track record: daily return = sum_mtm / sum_allocation "
-            "(allocation scaled ×100). "
-            + ("Use the date range or drag a chart to recompute for any sub-period."
-               if dynamic else "Figures cover the full available history for each algo."))
+    if dynamic:
+        lede = ("Per-algo track record: daily return = sum_mtm / sum_allocation "
+                "(allocation scaled ×100). "
+                "Use the date range or drag a chart to recompute for any sub-period.")
+    else:
+        lede = ""
+
+    footer_html = _footer(load, cfg, n_per_year) if dynamic else ""
 
     body = (
         _appbar(title, lede)
         + toolbar
         + "<main class='wrap'>"
         + _meta_panel([
-            ("Algos reported",  str(len(algos))),
-            ("Allocation scale", f"×{cfg.allocation_scale}"),
+            ("Algos reported", str(len(algos))),
             ("Data range", f"{fmt_date(date_min)} &ndash; {fmt_date(date_max)}"),
         ])
+        + _methodology_note(cfg)
         + summary
         + "<section><h2>Per-algo detail</h2>" + "".join(cards) + "</section>"
-        + "</main>" + _footer(load, cfg, n_per_year)
+        + "</main>" + footer_html
     )
 
     if dynamic:
@@ -1410,7 +1556,16 @@ def generate_reports(cfg: Config) -> tuple[Path, Path, Path]:
     """Full pipeline: load → filter → aggregate → Excel → compute metrics → HTML."""
     cfg.output_dir.mkdir(parents=True, exist_ok=True)
 
-    # 1. Load & validate
+    # 1. Prompt for input path if not supplied via CLI / env
+    if cfg.input_path is None:
+        try:
+            raw_path = input("\nEnter path to CSV file (users_filtered_all.csv):\n> ").strip()
+        except EOFError:
+            raise ValueError("No input file specified. Pass --input or set ALGO_REPORT_INPUT.")
+        if not raw_path:
+            raise ValueError("No input file specified. Pass --input or set ALGO_REPORT_INPUT.")
+        object.__setattr__(cfg, "input_path", Path(raw_path).expanduser().resolve())
+
     load = load_data(cfg)
     df_all = load.df   # processed rows with scaled allocation
 
@@ -1430,19 +1585,32 @@ def generate_reports(cfg: Config) -> tuple[Path, Path, Path]:
 
     # 5. Build calendar from ALL loaded data (so gaps are detected vs the market)
     calendar = build_calendar(df_all)
-    n_per_year = trading_days_per_year(calendar)
-    logger.info("Trading days/year (derived): %.2f", n_per_year)
+    n_per_year_global = trading_days_per_year(calendar)
+    logger.info("Global trading days/year (derived): %.2f", n_per_year_global)
 
     date_min = df_proc["date"].min()
     date_max = df_proc["date"].max()
 
-    # 6. Compute metrics per algo from the processed (aggregated) return series
+    # 6. Compute metrics per algo from the processed (aggregated) return series.
+    #    N is computed PER ALGO from that algo's own trading dates so that:
+    #    - 0DTE algos (1, 7, 15) — only trade on expiry days (~54/yr after SEBI
+    #      restriction) — are annualised correctly against their own trading frequency.
+    #    - Carry-forward algos (8, 19, …) — trade most market days (~240/yr) — use
+    #      their own denser calendar.
+    #    Using a global N would inflate CAGR/Sharpe for low-frequency algos.
     per_algo: dict[str, MetricBundle] = {}
     algo_series: dict[str, pd.Series] = {}
+    algo_n_per_year: dict[str, float] = {}
 
     for algo, grp in df_proc.groupby("algo"):
         algo = str(algo)
         grp = grp.sort_values("date").set_index("date")
+
+        # Per-algo N: derived from this algo's own distinct trading dates
+        algo_calendar = pd.DatetimeIndex(sorted(grp.index.unique()))
+        n_per_year = trading_days_per_year(algo_calendar)
+        algo_n_per_year[algo] = n_per_year
+
         # daily fractional return = sum_mtm / sum_allocation
         ret = grp["sum_mtm"] / grp["sum_allocation"]
         ret.name = algo
@@ -1450,8 +1618,8 @@ def generate_reports(cfg: Config) -> tuple[Path, Path, Path]:
         b = compute_metrics(ret, calendar, cfg, n_per_year)
         per_algo[algo] = b
         logger.info(
-            "Algo %s: %d days | CAGR=%.2f%% | Sharpe=%.2f | MaxDD=%.2f%%",
-            algo, b.n_days,
+            "Algo %s: %d days | N/yr=%.1f | CAGR=%.2f%% | Sharpe=%.2f | MaxDD=%.2f%%",
+            algo, b.n_days, n_per_year,
             b.cagr * 100 if not _na(b.cagr) else float("nan"),
             b.sharpe if not _na(b.sharpe) else float("nan"),
             b.max_drawdown * 100 if not _na(b.max_drawdown) else float("nan"),
@@ -1460,10 +1628,11 @@ def generate_reports(cfg: Config) -> tuple[Path, Path, Path]:
     # 7. Build JSON payload for interactive report
     payload = {
         "params": {
-            "nPerYear": n_per_year,
+            "nPerYear": n_per_year_global,   # kept for reference; per-algo N used in metrics
             "rollingWindow": cfg.rolling_window,
             "maxGapDays": cfg.max_gap_days,
             "allocScale": cfg.allocation_scale,
+            "rfAnnual": cfg.risk_free_annual,
         },
         "dateMin": pd.Timestamp(date_min).strftime("%Y-%m-%d"),
         "dateMax": pd.Timestamp(date_max).strftime("%Y-%m-%d"),
@@ -1471,6 +1640,7 @@ def generate_reports(cfg: Config) -> tuple[Path, Path, Path]:
         "algos": [
             {
                 "id": a,
+                "nPerYear": algo_n_per_year[a],   # per-algo N for correct annualisation
                 "portfolio": series_points(algo_series[a]),
             }
             for a in sorted(per_algo.keys(), key=algo_sort_key)
@@ -1523,16 +1693,6 @@ def prompt_for_input_path(max_tries: int = 5) -> Path:
     raise ValueError("No valid input path provided.")
 
 
-def parse_allowed_brokers(raw: Optional[str]) -> frozenset[str]:
-    """
-    Parse a comma-separated broker whitelist into a lowercase frozenset.
-    If raw is None or empty, returns the module-level default.
-    """
-    if not raw or not raw.strip():
-        return ALLOWED_BROKERS_DEFAULT
-    return frozenset(b.strip().lower() for b in raw.split(",") if b.strip())
-
-
 def prompt_for_report_name(default: str = "Algo_performance_std") -> str:
     """
     Prompt the user for a base report name.
@@ -1555,77 +1715,45 @@ def prompt_for_report_name(default: str = "Algo_performance_std") -> str:
 def parse_args(argv: Optional[list] = None) -> Config:
     p = argparse.ArgumentParser(description="Generate algo performance HTML reports.")
     p.add_argument("--input",
-                   default=os.environ.get("ALGO_REPORT_INPUT"),
-                   help="Path to input CSV or Excel file.")
-    p.add_argument("--output-dir",
-                   default=os.environ.get("ALGO_REPORT_OUTDIR", "./reports"),
-                   help="Output directory (default: ./reports)")
+                metavar="PATH", help="Path to the CSV input file.")
     p.add_argument("--algos",
-                   default=os.environ.get("ALGO_REPORT_ALGOS"),
-                   help="Comma-separated algo IDs (e.g. '1,7,19') or 'all'.")
-    p.add_argument("--report-name",
-                   default=os.environ.get("ALGO_REPORT_NAME"),
-                   help="Base name for output HTML files, e.g. 'quant_report' produces "
-                        "quant_report_interactive.html and quant_report_client.html. "
-                        "If omitted, you will be prompted interactively.")
-    p.add_argument("--rolling-window", type=int,
-                   default=int(os.environ.get("ALGO_REPORT_ROLLING", "63")))
-    p.add_argument("--risk-free-annual", type=float,
-                   default=float(os.environ.get("ALGO_REPORT_RF", "0.0")))
-    p.add_argument("--max-gap-days", type=int,
-                   default=int(os.environ.get("ALGO_REPORT_MAX_GAP", "3")))
-    p.add_argument("--allocation-scale", type=int,
-                   default=int(os.environ.get("ALGO_REPORT_ALLOC_SCALE", "100")))
-    p.add_argument("--base-capital", type=int,
-                   default=int(os.environ.get("ALGO_REPORT_BASE_CAPITAL",
-                                              str(BASE_CAPITAL_DEFAULT))),
-                   help="Fixed base capital for Absolute PNL (default: 10000000 = 1 crore).")
-    p.add_argument("--date-format",
-                   default=os.environ.get("ALGO_REPORT_DATEFMT"),
-                   help="Explicit strptime format e.g. '%%d-%%m-%%Y'. Default: day-first auto.")
-    p.add_argument("--allowed-brokers",
-                   default=os.environ.get("ALGO_REPORT_ALLOWED_BROKERS"),
-                   help="Comma-separated broker whitelist (case-insensitive). "
-                        "Only rows matching these brokers are kept. "
-                        "Default: GyandeepStocks,Kredent,MastertrustPro,SISL,VT_Capital")
-    p.add_argument("-v", "--verbose", action="store_true")
-    args = p.parse_args(argv)
+        metavar="IDS", help="Comma-separated algo IDs, or 'all'.")
+    p.add_argument("--output-dir", default="./reports",
+        metavar="DIR", help="Directory for output files.")
+    p.add_argument("--rolling-window", type=int, default=63,
+        metavar="N", help="Rolling Sharpe window in trading days.")
+    p.add_argument("--risk-free-annual", type=float, default=0.065,
+        metavar="R", help="Annual risk-free rate for Sharpe/Sortino.")
+    p.add_argument("--max-gap-days", type=int, default=3,
+        metavar="N", help="Max missing trading days before a segment break.")
+    p.add_argument("--date-format", default=None,
+        metavar="FMT", help="Explicit date format, e.g. %%d-%%m-%%Y.")
+    p.add_argument("-v", "--verbose", action="store_true",
+        help="Verbose logging.")
+    ns = p.parse_args(argv)
 
-    configure_logging(args.verbose)
-
-    input_path = (Path(args.input).expanduser().resolve()
-                  if args.input else prompt_for_input_path())
-
-    # Report name: use CLI value, env var, or prompt
-    report_name = args.report_name
-    if not report_name:
-        report_name = prompt_for_report_name()
-
-    allowed = parse_allowed_brokers(args.allowed_brokers)
+    lvl = logging.DEBUG if ns.verbose else logging.INFO
+    logging.getLogger().setLevel(lvl)
 
     return Config(
-        input_path=input_path,
-        output_dir=Path(args.output_dir).expanduser().resolve(),
-        rolling_window=args.rolling_window,
-        risk_free_annual=args.risk_free_annual,
-        max_gap_days=args.max_gap_days,
-        allocation_scale=args.allocation_scale,
-        algos_raw=args.algos,
-        date_format=args.date_format,
-        report_name=report_name,
-        base_capital=args.base_capital,
-        allowed_brokers=allowed,
+        input_path=ns.input or os.environ.get("ALGO_REPORT_INPUT"),
+        algos_raw=ns.algos or os.environ.get("ALGO_REPORT_ALGOS"),
+        output_dir=Path(ns.output_dir or os.environ.get("ALGO_REPORT_OUTDIR", "./reports")),
+        rolling_window=ns.rolling_window,
+        risk_free_annual=ns.risk_free_annual,
+        max_gap_days=ns.max_gap_days,
+        date_format=ns.date_format,
     )
 
 
-def main(argv=None):
+def main(argv: Optional[list] = None) -> int:
+    cfg = parse_args(argv)
     try:
-        cfg = parse_args(argv)
         interactive, client, excel = generate_reports(cfg)
-        logger.info(
-            "Done.\n  Interactive : %s\n  Client copy : %s\n  Excel       : %s",
-            interactive, client, excel,
-        )
+        logger.info("Done. Reports written to %s", cfg.output_dir)
+        logger.info("  Interactive : %s", cfg.std_interactive_path)
+        logger.info("  Client      : %s", cfg.std_client_path)
+        logger.info("  Excel       : %s", cfg.processed_excel_path)
         return 0
     except (FileNotFoundError, ValueError) as exc:
         logger.error("%s", exc)

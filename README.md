@@ -58,10 +58,10 @@ python report_generator.py
 | `--output-dir` | `ALGO_REPORT_OUTDIR` | `./reports` | Where the HTML is written |
 | `--rolling-window` | `ALGO_REPORT_ROLLING` | `63` | Rolling Sharpe window (trading days) |
 | `--primary-allocation` | `ALGO_REPORT_PRIMARY_ALLOC` | `100000` | Standard "1cr" book size |
-| `--risk-free-annual` | `ALGO_REPORT_RF` | `0.0` | Risk-free rate for Sharpe/Sortino |
+| `--risk-free-annual` | `ALGO_REPORT_RF` | `0.065` | Risk-free rate for Sharpe/Sortino (3-yr avg 91-day T-Bill 2022–2025) |
 | `--max-gap-days` | `ALGO_REPORT_MAX_GAP` | `3` | Missing trading days tolerated before a "break" |
 | `--date-format` | `ALGO_REPORT_DATEFMT` | day-first | Explicit date format, e.g. `%d-%m-%Y`. Default auto-parses day-first (DD-MM-YYYY) |
-| `--exclude-broker` | `ALGO_REPORT_EXCLUDE_BROKER` | `19:MasterTrust_Noren` | Per-algo broker drops `algo:broker[,algo:broker]`. Pass `""` to disable. Case-insensitive |
+| *(no flag)* | — | — | Algo-19 broker exclusion, 0DTE filter, and 18-Apr-2024 exclusion are **hardcoded** — see *Data filters* below |
 | `-v` | — | off | Verbose logging |
 
 ## The interactive copy
@@ -119,19 +119,22 @@ daily return = the `ret_fraction` of the single row where `used_in_relay` is `Tr
 day. Every row in the file was used by at least one of the two (so the two flags are
 never both `False`).
 
-## Excluding bad-data brokers
+## Data filters
 
-Some broker feeds are unreliable for specific algos. Drop them per algo:
+The following filters are **hardcoded** (not configurable via CLI flags) and are applied
+before any scaling, aggregation, or metric calculation.
 
-```bash
-python report_generator.py --exclude-broker "19:MasterTrust_Noren"
-# multiple: --exclude-broker "19:MasterTrust_Noren,7:SomeBroker"
-# disable:  --exclude-broker ""
-```
+### 1. Algo-19 broker exclusion
 
-Default is `19:MasterTrust_Noren` (override or disable as above). Matching is
-case-insensitive and whitespace-trimmed. Excluded rows are logged, removed from **all**
-metrics, and are **not** written to the verification CSV (their absence = excluded).
+Rows where **`algo == 19`** AND **`broker`** is `MasterTrust_Noren` or
+`mastertrust_dealer` (case-insensitive, whitespace-trimmed) are dropped entirely.
+No global broker filter is applied to any other algo.
+
+### 2. 0DTE filter — algos 1, 7, 15
+
+For **algos 1, 7, and 15** only rows where the `dte` column equals **`0DTE`**
+(case-insensitive) are retained. All other DTE values for those algos are excluded.
+No DTE filter is applied to any other algo.
 
 ## Locked specification (the decisions this build encodes)
 
@@ -153,17 +156,17 @@ metrics, and are **not** written to the verification CSV (their absence = exclud
 **Metric conventions**
 - Cumulative Return = simple sum of daily returns; equity curve is **additive**;
   drawdown measured on that additive curve.
-- CAGR = mean daily return × N (simple-annualized).
-- N (trading days/yr) derived from the data = distinct dates / calendar years.
-- Sharpe / Sortino: risk-free = 0%; Sortino downside vs a 0 target.
+- CAGR = geometric: `(1 + Σrₜ)^(N/days) − 1`; N and days both from that algo's own calendar.
+- N (trading days/yr) is **per-algo** — derived from each algo's own trading calendar, not a shared global calendar. Critical for 0DTE algos (1, 7, 15) that trade only on expiry days.
+- Sharpe / Sortino: risk-free = 6.5% p.a. (3-yr avg 91-day T-Bill 2022–2025), applied as `rf_daily = rf_annual / N`; Sortino downside vs 0 target (excess return over RF, downside volatility of raw returns).
 - Win = return > 0; Loss = return <= 0 (**flat day counts as a loss**).
 - Kelly = `W - (1-W)/R` (discrete).
 - Path metrics (Calmar, Max Drawdown, Avg Drawdown Days, consecutive W/L) use the
   **largest contiguous segment** when real breaks exist; breaks are flagged.
 
 **Data hygiene**
-- Rows dropped (and logged): unparseable date, null `mtm_all`, null/<=0 `allocation`,
-  duplicate `(user, algo, date)`.
+- Rows dropped (and logged): algo-19 broker exclusions, non-0DTE rows for algos 1/7/15,
+  unparseable date, null `mtm_all`, null/<=0 `allocation`, duplicate `(user, algo, date)`.
 
 ## One tunable worth reviewing: `--max-gap-days`
 

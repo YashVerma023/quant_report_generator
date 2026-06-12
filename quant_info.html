@@ -121,25 +121,27 @@ footer{background:#0d1117;border-top:1px solid #21262d;padding:1.5rem 2rem;text-
   <div class="section-title" id="pipeline">Data Pipeline &amp; Processed Columns</div>
 
   <div class="pipeline-card">
-    <h4>Step 1 — Broker Whitelist (applied before any aggregation)</h4>
-    <p>Only rows where <code>broker</code> (case-insensitive) matches one of the following 5 brokers are retained. All other brokers are dropped across every algo.</p>
+    <h4>Step 1 — Algo-19 Broker Exclusion (applied before any aggregation)</h4>
+    <p>Rows where <code>algo == 19</code> <strong>and</strong> <code>broker</code> (case-insensitive, whitespace-trimmed) is one of the following are dropped. No global broker filter is applied to any other algo.</p>
     <div class="broker-list">
-      <span class="broker-tag">GyandeepStocks</span>
-      <span class="broker-tag">Kredent</span>
-      <span class="broker-tag">MastertrustPro</span>
-      <span class="broker-tag">SISL</span>
-      <span class="broker-tag">VT_Capital</span>
+      <span class="broker-tag">MasterTrust_Noren</span>
+      <span class="broker-tag">mastertrust_dealer</span>
     </div>
   </div>
 
   <div class="pipeline-card">
-    <h4>Step 2 — Allocation Scaling</h4>
+    <h4>Step 2 — 0DTE Filter for Algos 1, 7, 15 (applied before any aggregation)</h4>
+    <p>For <strong>algos 1, 7, and 15</strong>, only rows where the <code>dte</code> column equals <code>0DTE</code> (case-insensitive) are retained. All other DTE values for those algos are excluded before aggregation. No DTE filter is applied to any other algo.</p>
+  </div>
+
+  <div class="pipeline-card">
+    <h4>Step 3 — Allocation Scaling</h4>
     <p><code>processed_allocation = raw_allocation × 100</code></p>
     <p>Raw allocation values in the source file represent 1% of actual capital. Multiplying by 100 gives the true rupee allocation for each user-algo-date record.</p>
   </div>
 
   <div class="pipeline-card">
-    <h4>Step 3 — Daily Aggregation (Processed Data Sheet)</h4>
+    <h4>Step 4 — Daily Aggregation (Processed Data Sheet)</h4>
     <p>Rows are grouped by <code>(date, algo)</code>. The table below shows all columns in the <b>"processed data"</b> sheet of <code>Processed data.xlsx</code>.</p>
     <table class="col-table">
       <thead><tr><th>Column</th><th>Formula / Description</th><th>Example</th></tr></thead>
@@ -165,14 +167,18 @@ footer{background:#0d1117;border-top:1px solid #21262d;padding:1.5rem 2rem;text-
   <div class="metric-card">
     <div class="metric-header"><div class="metric-num">01</div><div class="metric-title">CAGR — Compound Annual Growth Rate</div></div>
     <div class="metric-body">
-      <p class="def">The annualised rate at which an investment grows over the period. Smooths volatility into a single consistent annual figure. Note: this implementation uses linear annualisation (mean daily return × N), not geometric compounding.</p>
+      <p class="def">The annualised compound growth rate — how much the strategy grows per year on average, accounting for compounding. Directly verifiable: total_pnl ÷ base_capital = cumulative return → annualised geometrically.</p>
       <div class="formula-block">daily_return (r_t)  =  sum_mtm_t  ÷  sum_allocation_t
 
-N  =  distinct trading dates ÷ calendar years spanned
+cumulative_return  =  Σ r_t   (additive sum)
 
-CAGR  =  mean(r_t)  ×  N
+N      =  per-algo trading days/yr
+           = algo's distinct trading dates ÷ calendar years algo has been running
+years  =  actual_days ÷ N
 
-Displayed as percentage.  e.g.  CAGR = 0.0012 × 252 = 30.24%</div>
+CAGR  =  (1 + cumulative_return) ^ (1 / years)  −  1
+
+e.g.  cumret = 1.1657, years = 2.401  →  CAGR = 2.1657^(1/2.401) − 1 = 37.98%</div>
       <table class="rating-table">
         <thead><tr><th>Range</th><th>Rating</th><th>Interpretation</th></tr></thead>
         <tbody>
@@ -241,7 +247,7 @@ N  =  derived trading days per year</div>
           <tr><td>&gt; 3.0</td><td><span class="badge badge-suspicious">Suspicious</span></td><td>May indicate overfitting</td></tr>
         </tbody>
       </table>
-      <div class="notes"><b>Notes:</b> Assumes normally distributed returns. Use Sortino alongside for strategies with asymmetric returns. Default risk-free rate in this system = 0% (configurable via <code>--risk-free-annual</code>).</div>
+      <div class="notes"><b>Notes:</b> Assumes normally distributed returns. Use Sortino alongside for strategies with asymmetric returns. Risk-free rate in this system = <b>6.5% p.a.</b> (3-yr avg Indian 91-day T-Bill, 2022–2025), applied as <code>rf_daily = 0.065 / N</code>.</div>
     </div>
   </div>
 
@@ -309,7 +315,9 @@ Computed on the largest contiguous segment (no data gaps &gt; max_gap_days).</di
       <p class="def">How much the strategy's returns fluctuate, annualised from daily data. Higher volatility = more uncertainty and emotional stress.</p>
       <div class="formula-block">Annual Volatility  =  std(r_t, ddof=1)  ×  √N
 
-N  =  derived trading days per year (≈ 252 for typical markets)</div>
+N  =  per-algo trading days/yr (distinct trading dates ÷ calendar years)
+     — NOT a global constant; 0DTE algos trading only on expiry days
+       will have a much lower N than carry-forward algos (~200–245/yr)</div>
       <table class="rating-table">
         <thead><tr><th>Range</th><th>Rating</th><th>Interpretation</th></tr></thead>
         <tbody>
@@ -389,8 +397,10 @@ Avg Drawdown Days  =  mean(episode lengths in trading days)</div>
     <div class="metric-header"><div class="metric-num">09</div><div class="metric-title">Kelly Criterion</div></div>
     <div class="metric-body">
       <p class="def">Optimal fraction of capital to risk per trade to maximise long-term growth while avoiding ruin. Balances aggression with safety.</p>
-      <div class="formula-block">W  =  win rate  =  count(r_t > 0) ÷ count(r_t ≠ 0)
-R  =  win/loss ratio  =  mean(r_t | r_t > 0)  ÷  |mean(r_t | r_t < 0)|
+      <div class="formula-block">Win   =  r_t > 0        Loss  =  r_t ≤ 0   (flat day counts as a loss)
+
+W  =  win rate  =  count(r_t > 0) ÷ count(r_t)           ← all days
+R  =  win/loss ratio  =  mean(r_t | r_t > 0)  ÷  |mean(r_t | r_t ≤ 0)|
 
 Kelly %  =  W  −  (1 − W) ÷ R
 
