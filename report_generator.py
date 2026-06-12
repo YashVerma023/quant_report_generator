@@ -655,6 +655,13 @@ def fmt_pct(frac: float, dp: int = 2) -> str:
     return f"{frac * 100:.{dp}f}%"
 
 
+def fmt_return(frac: float, dp: int = 2) -> str:
+    """Like fmt_pct but appends * to flag additive-return values."""
+    if _na(frac):
+        return "&mdash;"
+    return f"{frac * 100:.{dp}f}%*"
+
+
 def fmt_ratio(v: float, dp: int = 2) -> str:
     if _na(v):
         return "&mdash;"
@@ -705,8 +712,8 @@ def sparkline_svg(values: list[float], width: int = 130, height: int = 30) -> st
 # --------------------------------------------------------------------------- #
 # (key, display label, bundle attribute, formatter)
 METRICS: list[tuple] = [
-    ("cagr",      "CAGR",                  "cagr",              fmt_pct),
-    ("cumret",    "Cumulative Return",      "cumulative_return", fmt_pct),
+    ("cagr",      "CAGR",                  "cagr",              fmt_return),
+    ("cumret",    "Cumulative Return",      "cumulative_return", fmt_return),
     ("sharpe",    "Sharpe",                 "sharpe",            fmt_ratio),
     ("sortino",   "Sortino",                "sortino",           fmt_ratio),
     ("calmar",    "Calmar",                 "calmar",            fmt_ratio),
@@ -1353,6 +1360,11 @@ def _methodology_note(cfg: Config) -> str:
         " being short enough to flag a strategy regime change within the same year."
         " The Rolling Sharpe line is absent for the first"
         f" {cfg.rolling_window} trading days of each algo (warm-up period).</li>"
+        "<li><b>* Return values (CAGR, Cumulative Return):</b> Marked with * to indicate"
+        " these are <em>additive</em> fractional returns — daily r<sub>t</sub>"
+        " = sum_mtm / sum_allocation, summed linearly for Cumulative Return and"
+        " geometrically annualised for CAGR. They are <em>not</em> compounded"
+        " mark-to-market returns.</li>"
         "<li><b>Short-history caveat:</b> CAGR and Calmar are unreliable for algos with"
         " &lt;&nbsp;1 year of data &mdash; the quant reference guide recommends"
         " &ge;&nbsp;3 years for Calmar. Algos flagged"
@@ -1418,12 +1430,12 @@ def render_report(
             f"<tr data-algo-row='{html.escape(str(a))}'>"
             f"<td class='metric' data-v='{html.escape(str(a))}'>"
             f"{html.escape(str(a))}{warn_cell}</td>"
-            + _cell(a, "cagr",   "cagr",          fmt_pct,   b)
-            + _cell(a, "sharpe", "sharpe",         fmt_ratio, b)
-            + _cell(a, "sortino","sortino",         fmt_ratio, b)
-            + _cell(a, "maxdd",  "max_drawdown",    fmt_pct,   b)
-            + _cell(a, "calmar", "calmar",          fmt_ratio, b)
-            + _cell(a, "cumret", "cumulative_return", fmt_pct, b)
+            + _cell(a, "cagr",   "cagr",          fmt_return, b)
+            + _cell(a, "sharpe", "sharpe",         fmt_ratio,  b)
+            + _cell(a, "sortino","sortino",         fmt_ratio,  b)
+            + _cell(a, "maxdd",  "max_drawdown",    fmt_pct,    b)
+            + _cell(a, "calmar", "calmar",          fmt_ratio,  b)
+            + _cell(a, "cumret", "cumulative_return", fmt_return, b)
             + f"<td class='num' data-algo='{html.escape(str(a))}' "
               f"data-metric='days' data-v='{b.n_days}'>{b.n_days:,}</td>"
             + "</tr>"
